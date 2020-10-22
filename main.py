@@ -1,13 +1,9 @@
-from time import time
 import urllib.request
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import pylab
-import networkx as nx
 import math
 from time import time
 import cplex
 import pandas as pd
+import heapq
 
 log: dict = {
     'Graph name': [],
@@ -22,8 +18,14 @@ log: dict = {
 is_timeout = False
 start_time = time()
 
-BASE_PATH: str = "https://github.com/bogatovam/cplex-labs-hse/raw/master/graphs/"
+import matplotlib.pyplot as plt
+from matplotlib import pylab
+import networkx as nx
 
+BASE_PATH: str = "https://github.com/bogatovam/cplex-labs-hse/raw/master/graphs/"
+import sys
+
+sys.setrecursionlimit(3000)
 # sorted by time from smallest to largest
 GRAPHS_NAMES: list = [
     'hamming6-2.clq', 'MANN_a9.clq', 'san200_0.9_1.clq', 'san200_0.9_2.clq', 'hamming6-4.clq', 'gen200_p0.9_55.clq',
@@ -32,25 +34,76 @@ GRAPHS_NAMES: list = [
     'c-fat500-1.clq', 'p_hat300-1.clq', 'brock200_3.clq', 'brock200_4.clq', 'c-fat500-2.clq', 'p_hat300-2.clq',
     'sanr200_0.7.clq', 'brock200_1.clq'
 ]
-
 TIMEOUT_SEC = 3600
 EPS = 0.0001
 
 
+def save_graph(graph, file_name):
+    # initialze Figure
+    plt.figure(num=None, figsize=(20, 20), dpi=80)
+    plt.axis('off')
+    fig = plt.figure(1)
+    pos = nx.spring_layout(graph)
+    nx.draw_networkx_nodes(graph, pos)
+    nx.draw_networkx_edges(graph, pos)
+    nx.draw_networkx_labels(graph, pos)
+
+    cut = 1.00
+    xmax = cut * max(xx for xx, yy in pos.values())
+    ymax = cut * max(yy for xx, yy in pos.values())
+    plt.xlim(0, xmax)
+    plt.ylim(0, ymax)
+
+    plt.savefig(file_name, bbox_inches="tight")
+    pylab.close()
+    del fig
+
+
+class Vertex:
+    def __init__(self, index, degree, support) -> None:
+        self.index = index
+        self.degree = degree
+        self.support = support
+
+    def __eq__(self, o) -> bool:
+        return self.index == o.index
+
+    def __hash__(self) -> int:
+        return hash(self.degree)
+
+    def __lt__(self, other):
+        if self.degree == other.degree:
+            if self.support == other.support:
+                return self.index < other.index
+            else:
+                return self.support < other.support
+        else:
+            return self.degree < other.degree
+
+
+def support_vertex(vertex, _adjacency_lists):
+    support = 0
+    for neighbor in _adjacency_lists[vertex]:
+        support += len(_adjacency_lists[neighbor])
+    return support
+
+
 def order_vertex(_n: int, _adjacency_lists: list):
-    vertex_degree = [len(_adjacency_lists[i]) for i in range(0, _n)]
+    vertex_degree = [Vertex(i, len(_adjacency_lists[i]), support_vertex(i, _adjacency_lists)) for i in range(0, _n)]
+    heapq.heapify(vertex_degree)
     ordered_vertex = []
     for i in range(0, _n):
-        min_degree = math.inf
-        min_degree_index = math.inf
-        for j in range(0, _n):
-            if vertex_degree[j] < min_degree and j not in ordered_vertex:
-                min_degree = vertex_degree[j]
-                min_degree_index = j
+        # work better(and slower) than immersion (specific for heapq)
+        # but only this way we can improve heuristic
+        heapq.heapify(vertex_degree)
 
-        ordered_vertex.append(min_degree_index)
-        for neighbor in _adjacency_lists[min_degree_index]:
-            vertex_degree[neighbor] -= 1
+        min_vertex = heapq.heappop(vertex_degree)
+        ordered_vertex.append(min_vertex.index)
+        for neighbor in _adjacency_lists[min_vertex.index]:
+            if neighbor not in ordered_vertex:
+                neighbor_index = vertex_degree.index(Vertex(neighbor, None, None))
+                vertex_degree[neighbor_index].degree -= 1
+                vertex_degree[neighbor_index].support -= min_vertex.degree
 
     return ordered_vertex
 
@@ -153,9 +206,9 @@ def branching(variables: list):
     min_diff = math.inf
     branching_var = -1
 
-    for i in range(0, len(variables)):
-        if not variables[i].is_integer() and not is_close_to_integer(variables[i]):
-            diff = math.fabs(variables[i] - 0.5)
+    for i in reversed(range(0, len(variables))):
+        if not variables[i].is_integer():
+            diff = min(math.fabs(variables[i]), math.fabs(1 - variables[i]))
             if diff < min_diff:
                 min_diff = diff
                 branching_var = i
@@ -193,11 +246,13 @@ def delete_constraint(constraint_name, model: cplex.Cplex):
 
 
 def check_timeout():
+    global is_timeout
     return is_timeout or time() - start_time > TIMEOUT_SEC
 
 
 def branch_and_bound(model: cplex.Cplex, optimal_objective_value, optimal_values):
     if check_timeout():
+        global is_timeout
         is_timeout = True
         return optimal_objective_value, optimal_values
 
@@ -209,16 +264,14 @@ def branch_and_bound(model: cplex.Cplex, optimal_objective_value, optimal_values
     integer_new_result = round_with_eps(new_result)
 
     if not is_result_improved(optimal_objective_value, integer_new_result):
-        # print("BOUND:\tSolution became worse:\tmax clique size:\t{}".format(new_result))
+        # print("BOUND:\tSolution became worse from:\t{}\tto\t{}".format(optimal_objective_value, new_result))
         return optimal_objective_value, optimal_values
     if is_result_integer(new_variables):
-        # print("\nFound better integer solution:\tmax clique size:\t{}\n".format(new_result))
+        print("\nFound better integer solution:\tmax clique size:\t{}\n".format(new_result))
         return integer_new_result, new_variables
 
-    # print("BRANCHING:\t\tmax clique float size:\t{}".format(new_result))
-
     branching_var = branching(new_variables)
-    # print("BRANCHING:\t\tvariable:\t{}".format(branching_var))
+    # print("BRANCHING:\t\tmax clique float size:\t{}\t\t\t\t\t\t{}".format(new_result, branching_var))
 
     up, down = build_new_constrains(branching_var)
 
@@ -245,13 +298,24 @@ def transform_to_vertices(optimal_values):
     return vertices
 
 
+def set_global_timeout(val: bool):
+    global start_time
+    global is_timeout
+
+    is_timeout = val
+    start_time = time()
+
+
+def reduce_graph(_n: int, _m: int, _adjacency_lists: list, optimal_values: list):
+    new_list = []
+    for i in range(0, )
+
+
 def run_branch_and_bound(_n: int, _m: int, _adjacency_lists: list):
     optimal_objective_value, optimal_values = build_heuristic_clique(n, m, adjacency_lists, log)
 
     print("HEURISTIC: Found heuristic solution:\t\tmax clique size:\t{}\n".format(optimal_objective_value))
-
-    start_time = time()
-    is_timeout = False
+    set_global_timeout(False)
     initial_model = init_cplex_system(_n, _m, _adjacency_lists)
 
     optimal_objective_value, optimal_values = branch_and_bound(initial_model,
@@ -314,8 +378,9 @@ def read_graph(file_path):
         line = line.decode('ascii')
         line = line.strip('\n')
         if line.startswith('p'):
-            _n = int(line.split(' ')[2])
-            _m = int(line.split(' ')[3])
+            items = [int(s) for s in line.split() if s.isdigit()]
+            _n = int(items[0])
+            _m = int(items[1])
             break
     _adjacency_lists = [[] for i in range(0, _n)]
     for line in data:
@@ -344,35 +409,6 @@ def fake_graph():
     ]
 
     return _n, _m, _adjacency_lists
-
-
-def to_confusion_matrix(_adjacency_lists: list):
-    confusion_matrix = np.zeros((len(_adjacency_lists), len(_adjacency_lists)))
-    for i in range(0, len(_adjacency_lists)):
-        for elem in _adjacency_lists[i]:
-            confusion_matrix[i][elem] = 1
-    return confusion_matrix
-
-
-def save_graph(graph, file_name):
-    # initialze Figure
-    plt.figure(num=None, figsize=(20, 20), dpi=80)
-    plt.axis('off')
-    fig = plt.figure(1)
-    pos = nx.spring_layout(graph)
-    nx.draw_networkx_nodes(graph, pos)
-    nx.draw_networkx_edges(graph, pos)
-    nx.draw_networkx_labels(graph, pos)
-
-    cut = 1.00
-    xmax = cut * max(xx for xx, yy in pos.values())
-    ymax = cut * max(yy for xx, yy in pos.values())
-    plt.xlim(0, xmax)
-    plt.ylim(0, ymax)
-
-    plt.savefig(file_name, bbox_inches="tight")
-    pylab.close()
-    del fig
 
 
 if __name__ == '__main__':
