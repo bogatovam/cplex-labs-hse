@@ -32,6 +32,7 @@ void CqlGraph::readGraph(const std::string &graphsPath, const std::string &graph
 
     this->adjacency_lists.resize(n, std::vector<int>());
     this->confusion_matrix.resize(n, std::vector<bool>(n, false));
+    this->confusion_matrix_bit_set.resize(n, std::bitset<1000>(false));
 
     while (std::getline(file, current_line)) {
         if (current_line[0] != 'e') {
@@ -46,6 +47,9 @@ void CqlGraph::readGraph(const std::string &graphsPath, const std::string &graph
 
         this->confusion_matrix[current_edge.first - 1][current_edge.second - 1] = true;
         this->confusion_matrix[current_edge.second - 1][current_edge.first - 1] = true;
+
+        this->confusion_matrix_bit_set[current_edge.first - 1][current_edge.second - 1] = true;
+        this->confusion_matrix_bit_set[current_edge.second - 1][current_edge.first - 1] = true;
     }
     file.close();
 }

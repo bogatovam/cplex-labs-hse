@@ -46,4 +46,5 @@ _deps
 
 bin/
 lib/
+cmake-build-debug
 build
