@@ -9,4 +9,4 @@ static const std::string GRAPHS_NAMES[] = {
         "keller4.clq", "c-fat200-2.clq", "c-fat200-1.clq", "c-fat500-10.clq", "brock200_2.clq", "c-fat500-5.clq",
         "c-fat500-1.clq", "p_hat300-1.clq", "brock200_3.clq", "brock200_4.clq", "c-fat500-2.clq", "p_hat300-2.clq",
         "sanr200_0.7.clq", "brock200_1.clq"
-};
+}

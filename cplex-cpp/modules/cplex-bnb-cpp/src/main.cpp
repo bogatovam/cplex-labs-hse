@@ -1,6 +1,6 @@
 #include <iostream>
 #include <include/cql_graph.h>
-#include <include/configuration.h>
+#include <include/constants.h>
 #include <include/csv_writer.h>
 #include <include/utils.h>
 
