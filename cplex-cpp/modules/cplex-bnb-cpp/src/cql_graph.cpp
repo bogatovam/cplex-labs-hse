@@ -4,9 +4,26 @@
 #include <fstream>
 #include <sstream>
 
-void CqlGraph::readGraph(const std::string &graphsPath, const std::string &graphName) {
+CqlGraph::CqlGraph(const uint64_t n,
+                   const uint64_t m,
+                   std::vector<std::vector<bool>> matrix,
+                   std::vector<std::vector<uint64_t>> lists,
+                   std::vector<std::bitset<1000>> matrix_b) : n_(n),
+                                                              m_(m),
+                                                              confusion_matrix_(std::move(matrix)),
+                                                              adjacency_lists_(std::move(lists)),
+                                                              confusion_matrix_bit_set_(std::move(matrix_b)) {}
+
+CqlGraph CqlGraph::readGraph(const std::string &graphs_path, const std::string &graph_name) {
+    uint64_t n = 0;
+    uint64_t m = 0;
+    std::vector<std::vector<bool>> confusion_matrix;
+    std::vector<std::vector<uint64_t>> adjacency_lists;
+    // just big number
+    std::vector<std::bitset<1000>> confusion_matrix_bit_set;
+
     std::fstream file;
-    file.open(graphsPath + "/" + graphName, std::fstream::in | std::fstream::out | std::fstream::app);
+    file.open(graphs_path + "/" + graph_name, std::fstream::in | std::fstream::out | std::fstream::app);
 
     std::string type;
     std::string current_line;
@@ -23,16 +40,16 @@ void CqlGraph::readGraph(const std::string &graphsPath, const std::string &graph
             while ((iss >> tmp)) {
                 words.push_back(tmp);
             }
-            this->n = std::stoi(words[words.size() - 2]);
-            this->m = std::stoi(words[words.size() - 1]);
+            n = std::stoul(words[words.size() - 2]);
+            m = std::stoul(words[words.size() - 1]);
 
             break;
         }
     }
 
-    this->adjacency_lists.resize(n, std::vector<int>());
-    this->confusion_matrix.resize(n, std::vector<bool>(n, false));
-    this->confusion_matrix_bit_set.resize(n, std::bitset<1000>(false));
+    adjacency_lists.resize(n, std::vector<uint64_t>());
+    confusion_matrix.resize(n, std::vector<bool>(n, false));
+    confusion_matrix_bit_set.resize(n, std::bitset<1000>(false));
 
     while (std::getline(file, current_line)) {
         if (current_line[0] != 'e') {
@@ -42,50 +59,15 @@ void CqlGraph::readGraph(const std::string &graphsPath, const std::string &graph
         std::istringstream iss(current_line);
         iss >> type >> current_edge.first >> current_edge.second;
 
-        this->adjacency_lists[current_edge.first - 1].push_back(current_edge.second - 1);
-        this->adjacency_lists[current_edge.second - 1].push_back(current_edge.first - 1);
+        adjacency_lists[current_edge.first - 1].push_back(current_edge.second - 1);
+        adjacency_lists[current_edge.second - 1].push_back(current_edge.first - 1);
 
-        this->confusion_matrix[current_edge.first - 1][current_edge.second - 1] = true;
-        this->confusion_matrix[current_edge.second - 1][current_edge.first - 1] = true;
+        confusion_matrix[current_edge.first - 1][current_edge.second - 1] = true;
+        confusion_matrix[current_edge.second - 1][current_edge.first - 1] = true;
 
-        this->confusion_matrix_bit_set[current_edge.first - 1][current_edge.second - 1] = true;
-        this->confusion_matrix_bit_set[current_edge.second - 1][current_edge.first - 1] = true;
+        confusion_matrix_bit_set[current_edge.first - 1][current_edge.second - 1] = true;
+        confusion_matrix_bit_set[current_edge.second - 1][current_edge.first - 1] = true;
     }
     file.close();
-}
-
-int CqlGraph::getN() const {
-    return n;
-}
-
-void CqlGraph::setN(int n) {
-    CqlGraph::n = n;
-}
-
-int CqlGraph::getM() const {
-    return m;
-}
-
-void CqlGraph::setM(int m) {
-    CqlGraph::m = m;
-}
-
-const std::vector<std::vector<bool>> &CqlGraph::getConfusionMatrix() const {
-    return confusion_matrix;
-}
-
-void CqlGraph::setConfusionMatrix(const std::vector<std::vector<bool>> &confusionMatrix) {
-    confusion_matrix = confusionMatrix;
-}
-
-const std::vector<std::vector<int>> &CqlGraph::getAdjacencyLists() const {
-    return adjacency_lists;
-}
-
-void CqlGraph::setAdjacencyLists(const std::vector<std::vector<int>> &adjacencyLists) {
-    adjacency_lists = adjacencyLists;
-}
-
-CqlGraph::CqlGraph(const std::string &graphsPath, const std::string &graphName) {
-    this->readGraph(graphsPath, graphName);
+    return CqlGraph(n, m, confusion_matrix, adjacency_lists, confusion_matrix_bit_set);
 }

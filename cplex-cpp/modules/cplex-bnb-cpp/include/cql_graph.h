@@ -6,30 +6,21 @@
 
 class CqlGraph {
 private:
-    int n, m;
-    std::vector<std::vector<bool>> confusion_matrix;
-    std::vector<std::vector<int>> adjacency_lists;
-    // just big number
-    std::vector<std::bitset<1000>> confusion_matrix_bit_set;
 
-    void readGraph(const std::string &graphsPath, const std::string &graphName);
 public:
+    const uint64_t n_;
+    const uint64_t m_;
+    const std::vector<std::vector<bool>> confusion_matrix_;
+    const std::vector<std::vector<uint64_t>> adjacency_lists_;
+    // just big number
+    const std::vector<std::bitset<1000>> confusion_matrix_bit_set_;
 
-    int getN() const;
+    CqlGraph(uint64_t n,
+             uint64_t m,
+             std::vector<std::vector<bool>> matrix,
+             std::vector<std::vector<uint64_t>> lists,
+             std::vector<std::bitset<1000>> matrix_b);
 
-    void setN(int n);
+    static CqlGraph readGraph(const std::string &graphs_path, const std::string &graph_name);
 
-    int getM() const;
-
-    void setM(int m);
-
-    const std::vector<std::vector<bool>> &getConfusionMatrix() const;
-
-    void setConfusionMatrix(const std::vector<std::vector<bool>> &confusionMatrix);
-
-    const std::vector<std::vector<int>> &getAdjacencyLists() const;
-
-    void setAdjacencyLists(const std::vector<std::vector<int>> &adjacencyLists);
-
-    CqlGraph(const std::string &graphsPath, const std::string &graphName);
 };
