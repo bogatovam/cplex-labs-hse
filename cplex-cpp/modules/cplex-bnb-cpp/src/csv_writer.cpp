@@ -26,7 +26,8 @@ void CsvWriter::write_row(const std::map<std::string, std::string> &values) {
         try {
             const std::string &column_value = values.at(column);
             file_stream << column_value << column_separator;
-        } catch (std::out_of_range& e) {
+        } catch (std::out_of_range &e) {
+            std::cout << e.what() << std::endl;
             file_stream << column_separator;
         }
     }

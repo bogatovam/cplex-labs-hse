@@ -13,4 +13,6 @@ namespace max_clique_solver {
     void solve(const CqlGraph &graph, const CsvWriter &csv_writer, const Strategy &calc_strategy);
 
     void branch_and_cut();
+
+    std::set<uint64_t> getBestMaxClique();
 }
