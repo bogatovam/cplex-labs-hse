@@ -1,3 +1,4 @@
+#define CHECK_SOLUTION
 
 #include <include/cql_graph.h>
 
@@ -15,23 +16,21 @@
 
 #include <cassert>
 
-CqlGraph::CqlGraph(const std::size_t n,
-                   const std::size_t m,
-                   std::vector<std::vector<bool>> matrix,
-                   std::vector<std::set<uint64_t>> lists,
-                   std::vector<std::bitset<1000>> matrix_b) : n_(n),
-                                                              m_(m),
-                                                              confusion_matrix_(std::move(matrix)),
-                                                              adjacency_lists_(std::move(lists)),
-                                                              confusion_matrix_bit_set_(std::move(matrix_b)) {}
+CqlGraph::CqlGraph(
+        const std::size_t n,
+        const std::size_t m,
+        std::vector<std::set<uint64_t>> lists,
+        std::vector<std::bitset<1024>> matrix_b) : n_(n),
+                                                   m_(m),
+                                                   adjacency_lists_(std::move(lists)),
+                                                   confusion_matrix_bit_set_(std::move(matrix_b)) {}
 
 CqlGraph CqlGraph::readGraph(const std::string &graphs_path, const std::string &graph_name) {
     std::size_t n = 0;
     std::size_t m = 0;
-    std::vector<std::vector<bool>> confusion_matrix;
     std::vector<std::set<uint64_t>> adjacency_lists;
     // just big number
-    std::vector<std::bitset<1000>> confusion_matrix_bit_set;
+    std::vector<std::bitset<1024>> confusion_matrix_bit_set;
 
     std::fstream file;
     file.open(graphs_path + "/" + graph_name, std::fstream::in | std::fstream::out | std::fstream::app);
@@ -59,45 +58,41 @@ CqlGraph CqlGraph::readGraph(const std::string &graphs_path, const std::string &
     }
 
     adjacency_lists.resize(n, std::set<uint64_t>());
-    confusion_matrix.resize(n, std::vector<bool>(n, false));
-    confusion_matrix_bit_set.resize(n, std::bitset<1000>(false));
+    confusion_matrix_bit_set.resize(n, std::bitset<1024>(false));
 
     while (std::getline(file, current_line)) {
         if (current_line[0] != 'e') {
             continue;
         }
-
         std::istringstream iss(current_line);
         iss >> type >> current_edge.first >> current_edge.second;
 
         adjacency_lists[current_edge.first - 1].insert(current_edge.second - 1);
         adjacency_lists[current_edge.second - 1].insert(current_edge.first - 1);
 
-        confusion_matrix[current_edge.first - 1][current_edge.second - 1] = true;
-        confusion_matrix[current_edge.second - 1][current_edge.first - 1] = true;
-
         confusion_matrix_bit_set[current_edge.first - 1][current_edge.second - 1] = true;
         confusion_matrix_bit_set[current_edge.second - 1][current_edge.first - 1] = true;
     }
     file.close();
-    return CqlGraph(n, m, confusion_matrix, adjacency_lists, confusion_matrix_bit_set);
+    return CqlGraph(n, m, adjacency_lists, confusion_matrix_bit_set);
 }
 
-std::set<uint64_t> CqlGraph::getHeuristicMaxClique(const std::vector<uint64_t> &coloring) const {
+std::set<uint64_t>
+CqlGraph::getHeuristicMaxClique(const std::vector<uint64_t> &coloring, NodesOrderingStrategy cs) const {
     std::set<uint64_t> current_clique = std::set<uint64_t>();
 
-    auto set_function = [&](uint64_t i, uint64_t j) {
+    auto cmp = [&](uint64_t i, uint64_t j) {
         return (coloring[i] > coloring[j]) ||
-               ((coloring[i] == coloring[j]) && (degree(i) > degree(j))) ||
+               ((coloring[i] == coloring[j]) && (degree(i) < degree(j))) ||
                ((coloring[i] == coloring[j]) && (degree(i) == degree(j)) && i < j);
     };
 
     std::vector<uint64_t> vertices(n_);
     std::iota(vertices.begin(), vertices.end(), 0);
-    std::sort(vertices.begin(), vertices.end(), set_function);
+    std::sort(vertices.begin(), vertices.end(), cmp);
 
-    std::bitset<1000> used;
-    std::bitset<1000> candidates;
+    std::bitset<1024> used;
+    std::bitset<1024> candidates;
 
     candidates.set();
 
@@ -120,14 +115,56 @@ std::set<uint64_t> CqlGraph::getHeuristicMaxClique(const std::vector<uint64_t> &
             break;
         }
     }
+#ifdef CHECK_SOLUTION
     assert(isClique(current_clique));
+#endif
+    return current_clique;
+}
+
+std::bitset<1024> CqlGraph::getHeuristicMaxCliqueRecursive(const std::vector<uint64_t> &coloring,
+                                                                 NodesOrderingStrategy cs) const {
+    std::bitset<1024> current_clique;
+
+    std::bitset<1024> used;
+    std::bitset<1024> candidates;
+
+    candidates.set();
+
+    uint64_t best_candidate = findCliqueBestCandidate(coloring, *this);
+    uint64_t max_color = UINT64_MAX;
+
+    while (true) {
+        used[best_candidate] = true;
+        current_clique.set(best_candidate, true);
+
+        candidates = candidates & confusion_matrix_bit_set_[best_candidate] & (~used);
+
+        if (candidates.none()) {
+            break;
+        }
+        CqlGraph subgraph = buildSubgraph(candidates);
+
+        auto curr_coloring_to_max_color = subgraph.colorGraph(cs);
+        max_color = curr_coloring_to_max_color.second;
+
+        if (max_color != 0) {
+            best_candidate = findCliqueBestCandidate(curr_coloring_to_max_color.first, subgraph);
+        } else {
+            best_candidate = 0;
+            while (!candidates.test(best_candidate)) best_candidate++;
+        }
+    }
+#ifdef CHECK_SOLUTION
+    assert(isClique(current_clique));
+#endif
     return current_clique;
 }
 
 // https://www.geeksforgeeks.org/graph-coloring-set-2-greedy-algorithm/
-std::vector<uint64_t> CqlGraph::colorGraph(const NodesOrderingStrategy &strategy) const {
+std::pair<std::vector<uint64_t>, uint64_t> CqlGraph::colorGraph(const NodesOrderingStrategy &strategy) const {
     std::vector<uint64_t> ordered_vertices = orderVertices(strategy);
 
+    uint64_t max_color = 0;
     std::map<uint64_t, std::set<uint64_t>> coloring;
     std::vector<uint64_t> colored_vertices(n_, UINT64_MAX);
 
@@ -143,15 +180,16 @@ std::vector<uint64_t> CqlGraph::colorGraph(const NodesOrderingStrategy &strategy
         std::size_t min_color = 0;
         while (used_colors[min_color]) min_color++;
 
+        max_color = std::max(min_color, max_color);
         colored_vertices[v] = min_color;
         coloring[min_color].insert(v);
 
         std::fill(used_colors.begin(), used_colors.end(), 0);
     }
-
+#ifdef CHECK_SOLUTION
     assert(isColoringCorrect(colored_vertices));
-
-    return colored_vertices;
+#endif
+    return {colored_vertices, max_color};
 }
 
 std::vector<uint64_t> CqlGraph::orderVertices(const NodesOrderingStrategy &strategy) const {
@@ -169,8 +207,8 @@ std::vector<uint64_t> CqlGraph::orderVertices(const NodesOrderingStrategy &strat
             return orderVerticesSmallestDegreeSupportFirst(vertices);
         case NodesOrderingStrategy::RANDOM:
             return orderVerticesRandom(vertices);
-        case NodesOrderingStrategy::SATURATION_LARGEST_FIRST:
-            return orderVerticesSaturationLargestFirst(vertices);
+        case NodesOrderingStrategy::SATURATION_SMALLEST_FIRST:
+            return orderVerticesSaturationSmallestFirst(vertices);
     }
     return std::vector<uint64_t>();
 }
@@ -243,7 +281,7 @@ std::vector<uint64_t> CqlGraph::orderVerticesRandom(std::vector<uint64_t> vertic
     return vertices;
 }
 
-std::vector<uint64_t> CqlGraph::orderVerticesSaturationLargestFirst(std::vector<uint64_t> vertices) const {
+std::vector<uint64_t> CqlGraph::orderVerticesSaturationSmallestFirst(std::vector<uint64_t> vertices) const {
     std::vector<uint64_t> ordered_vertices;
     std::vector<uint64_t> saturation(n_, 0);
 
@@ -260,18 +298,19 @@ std::vector<uint64_t> CqlGraph::orderVerticesSaturationLargestFirst(std::vector<
         uint64_t next_vertex = *saturation_queue.begin();
         saturation_queue.erase(saturation_queue.begin());
 
-        saturation[next_vertex] = -1;
+        saturation[next_vertex] = UINT64_MAX;
 
         ordered_vertices.push_back(next_vertex);
         for (const uint64_t neighbor: adjacency_lists_[next_vertex]) {
             // check if vertex already in ordered vertexes
-            if (saturation[next_vertex] != -1) {
+            if (saturation[neighbor] != UINT64_MAX) {
                 saturation_queue.erase(neighbor);
                 saturation[neighbor]++;
                 saturation_queue.insert(neighbor);
             }
         }
     }
+    std::reverse(ordered_vertices.begin(), ordered_vertices.end());
     return ordered_vertices;
 }
 
@@ -296,4 +335,200 @@ bool CqlGraph::isClique(const std::set<uint64_t> &clique) const {
         }
     }
     return true;
+}
+
+bool CqlGraph::isClique(const std::bitset<1024> &clique) const {
+
+    for (std::size_t v = 0; v < n_; ++v) {
+        for (std::size_t u = 0; u < n_; ++u) {
+            if (clique[u] && clique[v]) {
+                if (u != v && !(confusion_matrix_bit_set_[u][v])) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+
+std::bitset<1024> CqlGraph::localSearch(std::bitset<1024> &clique) const {
+//  1-tight, if exactly 1 of its not neighbors lie in the solution.
+// 2-improvement can be applied if the inserted adjacent vertices x, y are 1-tight vertices
+//with common vertex v, which is to be removed from the solution Q.
+
+// посчитать тау
+// вычислить для него кадидатов для кажой вершины
+// как учесть те вершины, которые соеденены со всеми? - в поиске в подграфе учитывать условие,
+// что в старом графе хотя бы одна из них должны быть соеденена с вершиной v
+// НО сказано как минимум одна! значит это не сломает решение
+// несправедливо удаленная вершина может добавится в следующей итерации
+    std::bitset<1024> possible_candidates = ~clique;
+    std::vector<uint64_t> tightness = calculateTightness(clique, possible_candidates);
+    std::map<uint64_t, std::bitset<1024>> candidates = buildCandidatesSet(clique, possible_candidates, tightness);
+
+    for (std::pair<uint64_t, std::bitset<1024>> x_to_L_x: candidates) {
+        if (x_to_L_x.second.count() < 2) {
+            std::cout << "too few candidates" << std::endl;
+            continue;
+        }
+
+        CqlGraph subgraph = buildSubgraph(x_to_L_x.second);
+        std::pair<uint64_t, uint64_t> swap = findFirstSwap(subgraph);
+
+        if (swap.first == NULL) {
+            std::cout << "Cannot found connected vertices" << std::endl;
+            continue;
+        }
+
+        std::cout << "Increase by 1!!!" << std::endl;
+        updateCliqueAndCandidates(clique, tightness, candidates, x_to_L_x.first, swap);
+
+#ifdef CHECK_SOLUTION
+        assert(isClique(clique));
+#endif
+    }
+    return clique;
+}
+
+
+//tightness - количетво соседей не принадлежащей решению вершины которые в клике
+std::vector<uint64_t> CqlGraph::calculateTightness(std::bitset<1024> clique,
+                                                   std::bitset<1024> possible_candidates) const {
+    std::vector<uint64_t> tightness(n_, 0);
+
+    for (std::size_t v = 0; v < n_; ++v) {
+        if (possible_candidates[v]) {
+            tightness[v] = ((confusion_matrix_bit_set_[v]) & clique).count();
+        }
+    }
+    return tightness;
+}
+
+std::map<uint64_t, std::bitset<1024>> CqlGraph::buildCandidatesSet(std::bitset<1024> clique,
+                                                                   std::bitset<1024> possible_candidates,
+                                                                   const std::vector<uint64_t> &tightness) const {
+    std::map<uint64_t, std::bitset<1024>> candidates_per_vertex;
+    std::bitset<1024> connected_to_clique;
+
+    for (std::size_t v = 0; v < n_; ++v) {
+        if (possible_candidates[v]) {
+            // посчитать сколько НЕсоседей лежат в клике
+            if (tightness[v] == clique.size()) {
+                connected_to_clique.set(v, true);
+            } else if (tightness[v] == clique.size() - 1) {
+                std::bitset<1024> not_neighbor_in_clique = (~confusion_matrix_bit_set_[v]) & clique;
+                if (not_neighbor_in_clique.count() == 1) {
+                    //найти первую и единственную вершину
+                    uint64_t u = 0;
+                    while (not_neighbor_in_clique.test(u)) u++;
+                    candidates_per_vertex[u].set(v, true);
+                }
+            }
+        }
+    }
+
+    // потому что есть такие вешины, которые соединены со всей кликой
+    // и их можно добавить в паре вместе с удалением любой вершины
+    for (std::pair<uint64_t, std::bitset<1024>> entry: candidates_per_vertex) {
+        entry.second |= connected_to_clique;
+    }
+
+    return candidates_per_vertex;
+}
+
+CqlGraph CqlGraph::buildSubgraph(std::bitset<1024> vertices) const {
+    std::vector<std::set<uint64_t>> lists(n_);
+    std::vector<std::bitset<1024>> matrix_b(n_);
+
+    for (std::size_t v = 0; v < n_; ++v) {
+        if (!vertices[v]) {
+            matrix_b[v] = std::bitset<1024>();
+        } else {
+            matrix_b[v] = confusion_matrix_bit_set_[v] & vertices;
+        }
+    }
+
+    // может убрать ?
+    for (std::size_t v = 0; v < n_; ++v) {
+        for (std::size_t u = v; u < n_; ++u) {
+            if (matrix_b[v][u]) {
+                lists[v].insert(u);
+                lists[u].insert(v);
+            }
+        }
+    }
+
+    return CqlGraph(n_, 0, lists, matrix_b);
+}
+
+std::pair<uint64_t, uint64_t> CqlGraph::findFirstSwap(const CqlGraph &graph) const {
+    for (std::size_t v = 0; v < n_; ++v) {
+        if (!graph.adjacency_lists_[v].empty()) {
+            return {v, *adjacency_lists_[v].begin()};
+        }
+    }
+    return {NULL, NULL};
+}
+
+void CqlGraph::updateCliqueAndCandidates(std::bitset<1024> clique,
+                                         std::vector<uint64_t> tightness,
+                                         std::map<uint64_t, std::bitset<1024>> candidates,
+                                         uint64_t deleted,
+                                         std::pair<uint64_t, uint64_t> inserted) const {
+    // обработать удаленную вершину - удалить из мапы и обновить tightness
+    uint64_t inserted_connected_to_deleted =
+            confusion_matrix_bit_set_[deleted][inserted.first] + confusion_matrix_bit_set_[deleted][inserted.second];
+
+//   (clique.size() - 1) - old clique neighbors
+    tightness[deleted] = (clique.size() - 1) + inserted_connected_to_deleted;
+
+    clique.set(deleted, false);
+    clique.set(inserted.first, true);
+    clique.set(inserted.second, true);
+
+    for (const auto &neighbor: adjacency_lists_[inserted.first]) {
+        tightness[neighbor] += 1;
+    }
+    for (const auto &neighbor: adjacency_lists_[inserted.second]) {
+        tightness[neighbor] += 1;
+    }
+    std::bitset<1024> connected_to_clique;
+
+    for (std::size_t v = 0; v < n_; ++v) {
+        if (~clique[v]) {
+            // посчитать сколько НЕсоседей лежат в клике
+            if (tightness[v] == clique.size()) {
+                connected_to_clique.set(v, true);
+            } else if (tightness[v] == clique.size() - 1) {
+                std::bitset<1024> not_neighbor_in_clique = (~confusion_matrix_bit_set_[v]) & clique;
+                if (not_neighbor_in_clique.count() == 1) {
+                    //найти первую и единственную вершину
+                    uint64_t u = 0;
+                    while (not_neighbor_in_clique.test(u)) u++;
+                    candidates[u].set(v, true);
+                }
+            }
+        }
+    }
+    // потому что есть такие вешины, которые соединены со всей кликой
+    // и их можно добавить в паре вместе с удалением любой вершины
+    for (std::pair<uint64_t, std::bitset<1024>> entry: candidates) {
+        entry.second |= connected_to_clique;
+    }
+}
+
+uint64_t CqlGraph::findCliqueBestCandidate(const std::vector<uint64_t> &curr_coloring, CqlGraph graph) const {
+    auto cmp = [&](uint64_t i, uint64_t j) {
+        return (curr_coloring[i] > curr_coloring[j]) ||
+               ((curr_coloring[i] == curr_coloring[j]) && (graph.degree(i) < graph.degree(j))) ||
+               ((curr_coloring[i] == curr_coloring[j]) && (graph.degree(i) == graph.degree(j)) && i < j);
+    };
+    uint64_t best_candidate = 0;
+    for (std::size_t v = 1; v < n_; ++v) {
+        if (cmp(v, best_candidate)) {
+            best_candidate = v;
+        }
+    }
+    return best_candidate;
 }

@@ -5,16 +5,22 @@
 #include <include/constants.h>
 #include <include/max_clique_solver.h>
 
+
 int main() {
-    std::vector<std::string> test = {"name", "time"};
+
+    std::vector<std::string> test = {"graph", "best possible solution", "heuristic_result", "heuristic_time (sec)",
+                                     "heuristic_time (ms)"};
 
     CsvWriter csv_log("./", "results-" + utils::get_current_datetime_str() + ".csv", test);
-
-    for (const std::string &graph_name: TEST_GRAPHS) {
-        CqlGraph graph = CqlGraph::readGraph("../../../tests", graph_name);
+    for (const auto &graph_name_and_best_solution: GRAPHS_NAMES) {
+        CqlGraph graph = CqlGraph::readGraph("../../../graphs", graph_name_and_best_solution.first);
 //      graph::CqlGraph graph = graph::CqlGraph::readGraph("../../../graphs", graph_name);
-        std::cout << graph.n_ << std::endl;
-        max_clique_solver::solve(graph, csv_log, max_clique_solver::Strategy::BRANCH_AND_BOUND);
+        std::cout << "\n\n" + graph_name_and_best_solution.first << "\t vertices number = " << graph.n_ << std::endl;
+        auto log = max_clique_solver::solve(graph, max_clique_solver::Strategy::BRANCH_AND_BOUND);
+
+        log["graph"] = graph_name_and_best_solution.first;
+        log["best possible solution"] = std::to_string(graph_name_and_best_solution.second);
+        csv_log.write_row(log);
     }
     return 0;
 }

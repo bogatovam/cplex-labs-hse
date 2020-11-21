@@ -10,7 +10,7 @@ namespace max_clique_solver {
 
     CplexModel init_cplex_model(const CqlGraph &graph);
 
-    void solve(const CqlGraph &graph, const CsvWriter &csv_writer, const Strategy &calc_strategy);
+    std::map<std::string, std::string> solve(const CqlGraph &graph, const Strategy &calc_strategy);
 
     void branch_and_cut();
 

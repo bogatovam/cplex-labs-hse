@@ -12,16 +12,16 @@ enum class NodesOrderingStrategy {
     SMALLEST_DEGREE_FIRST,
     SMALLEST_DEGREE_SUPPORT_FIRST,
     RANDOM,
-    SATURATION_LARGEST_FIRST
+    SATURATION_SMALLEST_FIRST
 };
 
 static const std::vector<NodesOrderingStrategy> nodes_ordering_strategies = {
-        NodesOrderingStrategy::SATURATION_LARGEST_FIRST,
+        NodesOrderingStrategy::SATURATION_SMALLEST_FIRST,
         NodesOrderingStrategy::SMALLEST_DEGREE_SUPPORT_FIRST,
-        NodesOrderingStrategy::LARGEST_DEGREE_FIRST,
+//        NodesOrderingStrategy::LARGEST_DEGREE_FIRST,
         NodesOrderingStrategy::SMALLEST_DEGREE_FIRST,
-        NodesOrderingStrategy::RANDOM,
-        NodesOrderingStrategy::INDEX,
+//        NodesOrderingStrategy::RANDOM,
+        NodesOrderingStrategy::INDEX
 };
 
 class CqlGraph {
@@ -29,20 +29,19 @@ public:
     const std::size_t n_;
     const std::size_t m_;
 
-    const std::vector<std::vector<bool>> confusion_matrix_;
     const std::vector<std::set<uint64_t>> adjacency_lists_;
     // just big number
-    const std::vector<std::bitset<1000>> confusion_matrix_bit_set_;
+    const std::vector<std::bitset<1024>> confusion_matrix_bit_set_;
 
-    CqlGraph(std::size_t n,
-             std::size_t m,
-             std::vector<std::vector<bool>> matrix,
-             std::vector<std::set<uint64_t>> lists,
-             std::vector<std::bitset<1000>> matrix_b);
+    CqlGraph(
+            std::size_t n,
+            std::size_t m,
+            std::vector<std::set<uint64_t>> lists,
+            std::vector<std::bitset<1024>> matrix_b);
 
     static CqlGraph readGraph(const std::string &graphs_path, const std::string &graph_name);
 
-    std::vector<uint64_t> colorGraph(const NodesOrderingStrategy &strategy) const;
+    std::pair<std::vector<uint64_t>, uint64_t> colorGraph(const NodesOrderingStrategy &strategy) const;
 
     std::vector<uint64_t> orderVertices(const NodesOrderingStrategy &strategy) const;
 
@@ -54,13 +53,13 @@ public:
 
     std::vector<uint64_t> orderVerticesRandom(std::vector<uint64_t> vertices) const;
 
-    std::vector<uint64_t> orderVerticesSaturationLargestFirst(std::vector<uint64_t> vertices) const;
+    std::vector<uint64_t> orderVerticesSaturationSmallestFirst(std::vector<uint64_t> vertices) const;
 
     std::vector<uint64_t> verticesSupport() const;
 
     bool isColoringCorrect(std::vector<uint64_t> coloring) const;
 
-    std::set<uint64_t> getHeuristicMaxClique(const std::vector<uint64_t> &coloring) const;
+    std::set<uint64_t> getHeuristicMaxClique(const std::vector<uint64_t> &coloring, NodesOrderingStrategy cs) const;
 
     bool isClique(const std::set<uint64_t> &clique) const;
 
@@ -77,4 +76,28 @@ public:
         }
         return max_degree;
     }
+
+    std::bitset<1024> localSearch(std::bitset<1024> &clique) const;
+
+    std::map<uint64_t, std::bitset<1024>>
+    buildCandidatesSet(std::bitset<1024> clique, std::bitset<1024> possible_candidates,
+                       const std::vector<uint64_t> &tightness) const;
+
+    CqlGraph buildSubgraph(std::bitset<1024> set) const;
+
+    std::pair<uint64_t, uint64_t> findFirstSwap(const CqlGraph &graph) const;
+
+    void updateCliqueAndCandidates(std::bitset<1024> clique,
+                                   std::vector<uint64_t> tightness,
+                                   std::map<uint64_t, std::bitset<1024>> candidates,
+                                   uint64_t deleted,
+                                   std::pair<uint64_t, uint64_t> inserted) const;
+
+    std::vector<uint64_t> calculateTightness(std::bitset<1024> clique, std::bitset<1024> possible_candidates) const;
+
+    std::bitset<1024> getHeuristicMaxCliqueRecursive(const std::vector<uint64_t> &coloring, NodesOrderingStrategy cs) const;
+
+    bool isClique(const std::bitset<1024> &clique) const;
+
+    uint64_t findCliqueBestCandidate(const std::vector<uint64_t> &vector, CqlGraph graph) const;
 };
