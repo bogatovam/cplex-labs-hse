@@ -116,7 +116,10 @@ CqlGraph::getHeuristicMaxClique(const std::vector<uint64_t> &coloring, NodesOrde
         }
     }
 #ifdef CHECK_SOLUTION
-    assert(isClique(current_clique));
+    if (!isClique(current_clique)) {
+        std::cout << "this is not clique" << std::endl;
+        throw std::runtime_error("this is not clique");
+    }
 #endif
     return current_clique;
 }
@@ -155,7 +158,10 @@ std::bitset<1024> CqlGraph::getHeuristicMaxCliqueRecursive(const std::vector<uin
         }
     }
 #ifdef CHECK_SOLUTION
-    assert(isClique(current_clique));
+    if (!isClique(current_clique)) {
+        std::cout << "this is not clique" << std::endl;
+        throw std::runtime_error("this is not clique");
+    }
 #endif
     return current_clique;
 }
@@ -187,7 +193,10 @@ std::pair<std::vector<uint64_t>, uint64_t> CqlGraph::colorGraph(const NodesOrder
         std::fill(used_colors.begin(), used_colors.end(), 0);
     }
 #ifdef CHECK_SOLUTION
-    assert(isColoringCorrect(colored_vertices));
+    if (!isColoringCorrect(colored_vertices)) {
+        std::cout << "this coloring is not correct" << std::endl;
+        throw std::runtime_error("this coloring is not correct");
+    }
 #endif
     return {colored_vertices, max_color};
 }
@@ -385,7 +394,10 @@ std::bitset<1024> CqlGraph::localSearch(std::bitset<1024> &clique) const {
         updateCliqueAndCandidates(clique, tightness, candidates, x_to_L_x.first, swap);
 
 #ifdef CHECK_SOLUTION
-        assert(isClique(clique));
+        if (!isClique(clique)) {
+            std::cout << "this is not clique" << std::endl;
+            throw std::runtime_error("this is not clique");
+        }
 #endif
     }
     return clique;
@@ -538,6 +550,7 @@ bool CqlGraph::isVerticesIndependent(std::set<uint64_t> &independent_set) const 
     for (auto v: independent_set) {
         for (auto u: independent_set) {
             if (u != v && confusion_matrix_bit_set_[v][u]) {
+                std::cout << u << "\t" << v << std::endl;
                 return false;
             }
         }

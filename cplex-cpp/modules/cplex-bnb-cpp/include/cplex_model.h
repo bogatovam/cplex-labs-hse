@@ -7,6 +7,9 @@
 #include <ilcplex/ilocplex.h>
 #include <set>
 
+#include <include/cql_graph.h>
+#include "include/cplex_model.h"
+
 class CplexModel {
 private:
     // CPLEX environment. Takes care of everything, including memory management for CPLEX objects.
@@ -29,4 +32,6 @@ public:
     void addConstraints(const std::set<std::set<uint64_t>> &constraints, uint64_t lower_bound, uint64_t upper_bound);
 
     void reduceModel();
+
+    uint64_t solveInteger(const CqlGraph &graph);
 };

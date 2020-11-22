@@ -2,35 +2,9 @@
 #include "include/max_clique_solver.h"
 #include <chrono>
 
-#define CHECK_SOLUTION
+//#define CHECK_SOLUTION
 
 using namespace std::chrono;
-
-
-//bool isSafeForIndependentSet(const CqlGraph &graph, uint64_t vertex, std::set<uint64_t> current_solution) {
-//    for (auto iter : current_solution) {
-//        if (graph.confusion_matrix_bit_set_[vertex][iter]) {
-//            return false;
-//        }
-//    }
-//    return true;
-//}
-//
-//void findAllIndependentSets(const CqlGraph &graph,
-//                            uint64_t currV, uint64_t n,
-//                            std::set<uint64_t> current_solution,
-//                            std::set<std::set<uint64_t>> &general_solution) {
-//    for (uint64_t i = currV; i < n; i++) {
-//        if (isSafeForIndependentSet(graph, i, current_solution)) {
-//            current_solution.insert(i);
-//            findAllIndependentSets(graph, i +1, n, current_solution, general_solution);
-//            current_solution.erase(i);
-//        }
-//    }
-//    general_solution
-//            .insert(current_solution);
-//}
-
 
 std::set<std::set<uint64_t>> max_clique_solver::buildAdjacencyConstrains(const CqlGraph &graph) {
     std::set<std::set<uint64_t>> result;
@@ -59,8 +33,8 @@ std::set<std::set<uint64_t>> max_clique_solver::buildAdjacencyConstrains(const C
     for (uint32_t v = 0; v < graph.n_; ++v) {
         for (uint32_t u = v + 1; u < graph.n_; ++u) {
             if (u != v && !graph.confusion_matrix_bit_set_[u][v]) {
-                independent_vertices_per_node[u].push_back(u);
-                independent_vertices_per_node[v].push_back(v);
+                independent_vertices_per_node[u].push_back(v);
+                independent_vertices_per_node[v].push_back(u);
             }
         }
     }
@@ -74,12 +48,11 @@ std::set<std::set<uint64_t>> max_clique_solver::buildAdjacencyConstrains(const C
 
         constrain.emplace(v);
         std::vector<uint64_t> candidates = independent_vertices_per_node[v];
+
         while (!candidates.empty()) {
             uint64_t inserted_vertex = *candidates.begin();
-            candidates.erase(candidates.begin());
 
             constrain.emplace(*candidates.begin());
-
             std::vector<uint64_t> new_candidates;
             std::set_intersection(candidates.begin(), candidates.end(),
                                   independent_vertices_per_node[inserted_vertex].begin(),
@@ -87,8 +60,9 @@ std::set<std::set<uint64_t>> max_clique_solver::buildAdjacencyConstrains(const C
                                   inserter(new_candidates, new_candidates.begin()));
             candidates = new_candidates;
         }
-
-        result.emplace(constrain);
+        if (constrain.size() > 2) {
+            result.emplace(constrain);
+        }
     }
     return result;
 }
@@ -97,24 +71,38 @@ std::set<std::set<uint64_t>> max_clique_solver::buildAdjacencyConstrains(const C
 std::set<std::set<uint64_t>> max_clique_solver::buildColoringConstrains(const CqlGraph &graph,
                                                                         const std::map<NodesOrderingStrategy, std::vector<uint64_t>> &coloring) {
     std::set<std::set<uint64_t>> result;
+    std::map<uint64_t, std::set<uint64_t >> vertices_by_color;
+    for (const auto &type_to_coloring : coloring) {
+        vertices_by_color.clear();
 
-    for (const auto &independent_set : coloring) {
-        if (independent_set.second.size() <= 2)
-            continue;
-        std::set<uint64_t> constrain(independent_set.second.begin(), independent_set.second.end());
+        for (std::size_t v = 0; v < graph.n_; ++v) {
+            vertices_by_color[type_to_coloring.second[v]].insert(v);
+        }
 
-        // it really helps in some graphs
-        improveIndependentSet(graph, constrain);
-        result.emplace(std::set<uint64_t>{
-                constrain.begin(),
-                constrain.end()
-        });
+        for (auto independent_set: vertices_by_color) {
+            if (independent_set.second.size() <= 2)
+                continue;
+            std::set<uint64_t> constrain(independent_set.second.begin(), independent_set.second.end());
+
+            // it really helps in some graphs
+            std::set<std::set<uint64_t>> improvements = improveIndependentSet(graph, constrain);
+            if (improvements.empty()) {
+                result.emplace(std::set<uint64_t>{
+                        constrain.begin(),
+                        constrain.end()
+                });
+            }
+            result.insert(improvements.begin(), improvements.end());
+        }
     }
     return result;
 }
 
 
-void max_clique_solver::improveIndependentSet(const CqlGraph &graph, std::set<uint64_t> &independent_set) {
+std::set<std::set<uint64_t>> max_clique_solver::improveIndependentSet(const CqlGraph &graph,
+                                                                      const std::set<uint64_t> &independent_set) {
+    std::set<std::set<uint64_t>> result;
+    std::set<uint64_t> can_be_added;
     std::bitset<1024> independent_set_bit;
 
     for (auto v: independent_set) {
@@ -124,15 +112,37 @@ void max_clique_solver::improveIndependentSet(const CqlGraph &graph, std::set<ui
     for (auto v: independent_set) {
         independent_set_bit |= graph.confusion_matrix_bit_set_[v];
     }
-    for (std::size_t v = 0; v < graph.n_; ++v) {
-        if (!independent_set_bit[v]) {
-            independent_set.emplace(v);
+
+    bool hasImprovements = !independent_set_bit.all();
+    if (hasImprovements) {
+        std::bitset<1024> dop = ~independent_set_bit;
+        CqlGraph subgraph = graph.buildSubgraph(dop);
+        auto coloring = subgraph.colorGraph(NodesOrderingStrategy::SMALLEST_DEGREE_SUPPORT_FIRST);
+        std::map<uint64_t, std::set<uint64_t >> vertices_by_color;
+        for (std::size_t v = 0; v < graph.n_; ++v) {
+            vertices_by_color[coloring.first[v]].insert(v);
+        }
+        for (const auto &nested_independent_set: vertices_by_color) {
+            std::set<uint64_t> constrain;
+            for (auto v: nested_independent_set.second) {
+                if (dop[v]) {
+                    constrain.insert(v);
+                }
+            }
+            constrain.insert(independent_set.begin(), independent_set.end());
+
+#ifdef CHECK_SOLUTION
+            std::cout<<"CHECK"<<std::endl;
+            if (!graph.isVerticesIndependent(constrain)) {
+                std::cout << "set is not independent" << std::endl;
+                throw std::runtime_error("set is not independent");
+            }
+#endif
+            result.insert(constrain);
         }
     }
 
-#ifdef CHECK_SOLUTION
-    assert(graph.isVerticesIndependent(independent_set));
-#endif
+    return result;
 }
 
 CplexModel max_clique_solver::init_cplex_model(const CqlGraph &graph,
@@ -145,6 +155,8 @@ CplexModel max_clique_solver::init_cplex_model(const CqlGraph &graph,
 
     constrains.insert(adjacencyConstrains.begin(), adjacencyConstrains.end());
     constrains.insert(coloringConstrains.begin(), coloringConstrains.end());
+
+    cplex_solver.addConstraints(constrains, 0, 1);
     return cplex_solver;
 }
 
@@ -156,11 +168,16 @@ std::map<std::string, std::string> max_clique_solver::solve(const CqlGraph &grap
     std::bitset<1024> best_clique = getBestMaxClique(graph, coloring_by_strategy);
 
     CplexModel cplex_solver = init_cplex_model(graph, coloring_by_strategy);
-
     auto execution_time = steady_clock::now() - begin;
     log["heuristic_time (sec)"] = std::to_string(duration_cast<seconds>(execution_time).count());
     log["heuristic_time (ms)"] = std::to_string(duration_cast<milliseconds>(execution_time).count());
     log["heuristic_result"] = std::to_string(best_clique.count());
+
+    begin = steady_clock::now();
+    cplex_solver.solveInteger(graph);
+    execution_time = steady_clock::now() - begin;
+    log["cplex time (sec)"] = std::to_string(duration_cast<seconds>(execution_time).count());
+    log["cplex time (ms)"] = std::to_string(duration_cast<milliseconds>(execution_time).count());
 
     return log;
 }
