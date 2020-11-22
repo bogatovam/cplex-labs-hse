@@ -122,7 +122,7 @@ CqlGraph::getHeuristicMaxClique(const std::vector<uint64_t> &coloring, NodesOrde
 }
 
 std::bitset<1024> CqlGraph::getHeuristicMaxCliqueRecursive(const std::vector<uint64_t> &coloring,
-                                                                 NodesOrderingStrategy cs) const {
+                                                           NodesOrderingStrategy cs) const {
     std::bitset<1024> current_clique;
 
     std::bitset<1024> used;
@@ -369,19 +369,19 @@ std::bitset<1024> CqlGraph::localSearch(std::bitset<1024> &clique) const {
 
     for (std::pair<uint64_t, std::bitset<1024>> x_to_L_x: candidates) {
         if (x_to_L_x.second.count() < 2) {
-            std::cout << "too few candidates" << std::endl;
+//            std::cout << "too few candidates" << std::endl;
             continue;
         }
 
         CqlGraph subgraph = buildSubgraph(x_to_L_x.second);
         std::pair<uint64_t, uint64_t> swap = findFirstSwap(subgraph);
 
-        if (swap.first == NULL) {
-            std::cout << "Cannot found connected vertices" << std::endl;
+        if (swap.first == UINT64_MAX) {
+//            std::cout << "Cannot found connected vertices" << std::endl;
             continue;
         }
 
-        std::cout << "Increase by 1!!!" << std::endl;
+//        std::cout << "Increase by 1!!!" << std::endl;
         updateCliqueAndCandidates(clique, tightness, candidates, x_to_L_x.first, swap);
 
 #ifdef CHECK_SOLUTION
@@ -414,24 +414,25 @@ std::map<uint64_t, std::bitset<1024>> CqlGraph::buildCandidatesSet(std::bitset<1
     for (std::size_t v = 0; v < n_; ++v) {
         if (possible_candidates[v]) {
             // посчитать сколько НЕсоседей лежат в клике
-            if (tightness[v] == clique.size()) {
+            if (tightness[v] == clique.count()) {
                 connected_to_clique.set(v, true);
-            } else if (tightness[v] == clique.size() - 1) {
+            } else if (tightness[v] == clique.count() - 1) {
                 std::bitset<1024> not_neighbor_in_clique = (~confusion_matrix_bit_set_[v]) & clique;
                 if (not_neighbor_in_clique.count() == 1) {
                     //найти первую и единственную вершину
                     uint64_t u = 0;
-                    while (not_neighbor_in_clique.test(u)) u++;
+                    while (!not_neighbor_in_clique.test(u)) u++;
                     candidates_per_vertex[u].set(v, true);
                 }
             }
         }
     }
-
-    // потому что есть такие вешины, которые соединены со всей кликой
-    // и их можно добавить в паре вместе с удалением любой вершины
-    for (std::pair<uint64_t, std::bitset<1024>> entry: candidates_per_vertex) {
-        entry.second |= connected_to_clique;
+    if (connected_to_clique.count() > 0) {
+        // потому что есть такие вешины, которые соединены со всей кликой
+        // и их можно добавить в паре вместе с удалением любой вершины
+        for (std::pair<uint64_t, std::bitset<1024>> entry: candidates_per_vertex) {
+            entry.second |= connected_to_clique;
+        }
     }
 
     return candidates_per_vertex;
@@ -465,17 +466,17 @@ CqlGraph CqlGraph::buildSubgraph(std::bitset<1024> vertices) const {
 std::pair<uint64_t, uint64_t> CqlGraph::findFirstSwap(const CqlGraph &graph) const {
     for (std::size_t v = 0; v < n_; ++v) {
         if (!graph.adjacency_lists_[v].empty()) {
-            return {v, *adjacency_lists_[v].begin()};
+            return {v, *graph.adjacency_lists_[v].begin()};
         }
     }
-    return {NULL, NULL};
+    return {UINT64_MAX, UINT64_MAX};
 }
 
-void CqlGraph::updateCliqueAndCandidates(std::bitset<1024> clique,
-                                         std::vector<uint64_t> tightness,
-                                         std::map<uint64_t, std::bitset<1024>> candidates,
+void CqlGraph::updateCliqueAndCandidates(std::bitset<1024> &clique,
+                                         std::vector<uint64_t> &tightness,
+                                         std::map<uint64_t, std::bitset<1024>> &candidates,
                                          uint64_t deleted,
-                                         std::pair<uint64_t, uint64_t> inserted) const {
+                                         std::pair<uint64_t, uint64_t> &inserted) const {
     // обработать удаленную вершину - удалить из мапы и обновить tightness
     uint64_t inserted_connected_to_deleted =
             confusion_matrix_bit_set_[deleted][inserted.first] + confusion_matrix_bit_set_[deleted][inserted.second];
@@ -531,4 +532,15 @@ uint64_t CqlGraph::findCliqueBestCandidate(const std::vector<uint64_t> &curr_col
         }
     }
     return best_candidate;
+}
+
+bool CqlGraph::isVerticesIndependent(std::set<uint64_t> &independent_set) const {
+    for (auto v: independent_set) {
+        for (auto u: independent_set) {
+            if (u != v && confusion_matrix_bit_set_[v][u]) {
+                return false;
+            }
+        }
+    }
+    return true;
 }

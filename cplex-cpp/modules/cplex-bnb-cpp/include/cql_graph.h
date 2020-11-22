@@ -87,11 +87,11 @@ public:
 
     std::pair<uint64_t, uint64_t> findFirstSwap(const CqlGraph &graph) const;
 
-    void updateCliqueAndCandidates(std::bitset<1024> clique,
-                                   std::vector<uint64_t> tightness,
-                                   std::map<uint64_t, std::bitset<1024>> candidates,
+    void updateCliqueAndCandidates(std::bitset<1024> &clique,
+                                   std::vector<uint64_t> &tightness,
+                                   std::map<uint64_t, std::bitset<1024>> &candidates,
                                    uint64_t deleted,
-                                   std::pair<uint64_t, uint64_t> inserted) const;
+                                   std::pair<uint64_t, uint64_t> &inserted) const;
 
     std::vector<uint64_t> calculateTightness(std::bitset<1024> clique, std::bitset<1024> possible_candidates) const;
 
@@ -100,4 +100,6 @@ public:
     bool isClique(const std::bitset<1024> &clique) const;
 
     uint64_t findCliqueBestCandidate(const std::vector<uint64_t> &vector, CqlGraph graph) const;
+
+    bool isVerticesIndependent(std::set<uint64_t> &independent_set) const;
 };
