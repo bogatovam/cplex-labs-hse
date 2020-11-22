@@ -56,7 +56,7 @@ void CplexModel::reduceModel() {
 
 uint64_t CplexModel::solveInteger(const CqlGraph &graph) {
     IloCplex cplex(model);
-    cplex.exportModel("model.lp");
+//    cplex.exportModel("model.lp");
 
     cplex.setOut(env.getNullStream());
     bool solved = cplex.solve();
@@ -75,10 +75,10 @@ uint64_t CplexModel::solveInteger(const CqlGraph &graph) {
         }
     }
 
-    std::cout << obj_val << std::endl;
-    for (auto v: res) {
-        std::cout << v << ",\t";
-    }
-    std::cout << std::endl;
-    return 0;
+//    std::cout << obj_val << std::endl;
+//    for (auto v: res) {
+//        std::cout << v << ",\t";
+//    }
+//    std::cout << std::endl;
+    return static_cast<uint64_t>(obj_val);
 }

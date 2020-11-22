@@ -85,23 +85,16 @@ std::set<std::set<uint64_t>> max_clique_solver::buildColoringConstrains(const Cq
             std::set<uint64_t> constrain(independent_set.second.begin(), independent_set.second.end());
 
             // it really helps in some graphs
-            std::set<std::set<uint64_t>> improvements = improveIndependentSet(graph, constrain);
-            if (improvements.empty()) {
-                result.emplace(std::set<uint64_t>{
-                        constrain.begin(),
-                        constrain.end()
-                });
-            }
-            result.insert(improvements.begin(), improvements.end());
+            improveIndependentSet(graph, constrain, result);
         }
     }
     return result;
 }
 
 
-std::set<std::set<uint64_t>> max_clique_solver::improveIndependentSet(const CqlGraph &graph,
-                                                                      const std::set<uint64_t> &independent_set) {
-    std::set<std::set<uint64_t>> result;
+void max_clique_solver::improveIndependentSet(const CqlGraph &graph,
+                                              const std::set<uint64_t> &independent_set,
+                                              std::set<std::set<uint64_t>> &result) {
     std::set<uint64_t> can_be_added;
     std::bitset<1024> independent_set_bit;
 
@@ -129,20 +122,63 @@ std::set<std::set<uint64_t>> max_clique_solver::improveIndependentSet(const CqlG
                     constrain.insert(v);
                 }
             }
-            constrain.insert(independent_set.begin(), independent_set.end());
-
+            if (!constrain.empty()) {
+                constrain.insert(independent_set.begin(), independent_set.end());
 #ifdef CHECK_SOLUTION
-            std::cout<<"CHECK"<<std::endl;
+                std::cout<<"CHECK"<<std::endl;
+                if (!graph.isVerticesIndependent(constrain)) {
+                    std::cout << "set is not independent" << std::endl;
+                    throw std::runtime_error("set is not independent");
+                }
+#endif
+                result.insert(constrain);
+            }
+        }
+    } else {
+        result.emplace(std::set<uint64_t>{
+                independent_set.begin(),
+                independent_set.end()
+        });
+    }
+}
+
+void max_clique_solver::improveIndependentSetByOne(const CqlGraph &graph,
+                                                   const std::set<uint64_t> &independent_set,
+                                                   std::set<std::set<uint64_t>> &result) {
+    std::set<uint64_t> can_be_added;
+    std::bitset<1024> independent_set_bit;
+
+    for (auto v: independent_set) {
+        independent_set_bit.set(v, true);
+    }
+
+    for (auto v: independent_set) {
+        independent_set_bit |= graph.confusion_matrix_bit_set_[v];
+    }
+    for (std::size_t v = 0; v < graph.n_; ++v) {
+        if (!independent_set_bit[v]) {
+            can_be_added.insert(v);
+        }
+    }
+    for (auto v: can_be_added) {
+        std::set<uint64_t> constrain(independent_set);
+        constrain.insert(v);
+#ifdef CHECK_SOLUTION
+        std::cout<<"CHECK"<<std::endl;
             if (!graph.isVerticesIndependent(constrain)) {
                 std::cout << "set is not independent" << std::endl;
                 throw std::runtime_error("set is not independent");
             }
 #endif
-            result.insert(constrain);
-        }
+        result.insert(constrain);
     }
 
-    return result;
+    if (can_be_added.empty()) {
+        result.emplace(std::set<uint64_t>{
+                independent_set.begin(),
+                independent_set.end()
+        });
+    }
 }
 
 CplexModel max_clique_solver::init_cplex_model(const CqlGraph &graph,
@@ -174,10 +210,11 @@ std::map<std::string, std::string> max_clique_solver::solve(const CqlGraph &grap
     log["heuristic_result"] = std::to_string(best_clique.count());
 
     begin = steady_clock::now();
-    cplex_solver.solveInteger(graph);
+    auto object_val = cplex_solver.solveInteger(graph);
     execution_time = steady_clock::now() - begin;
     log["cplex time (sec)"] = std::to_string(duration_cast<seconds>(execution_time).count());
     log["cplex time (ms)"] = std::to_string(duration_cast<milliseconds>(execution_time).count());
+    log["result"] = std::to_string(object_val);
 
     return log;
 }

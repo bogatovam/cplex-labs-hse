@@ -23,8 +23,12 @@ namespace max_clique_solver {
     std::set<std::set<uint64_t>> buildColoringConstrains(const CqlGraph &graph,
                                                          const std::map<NodesOrderingStrategy, std::vector<uint64_t>> &coloring);
 
-    std::set<std::set<uint64_t>>
-    improveIndependentSet(const CqlGraph &graph, const std::set<uint64_t> &independent_set);
+    void improveIndependentSet(const CqlGraph &graph,
+                               const std::set<uint64_t> &independent_set,
+                               std::set<std::set<uint64_t>> &result);
 
 
+    void improveIndependentSetByOne(const CqlGraph &graph,
+                                    const std::set<uint64_t> &independent_set,
+                                    std::set<std::set<uint64_t>> &result);
 }
