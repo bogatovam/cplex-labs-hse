@@ -22,5 +22,7 @@ private:
 public:
     CsvWriter(std::string fileName, std::string filePath, std::vector<std::string> columns);
 
-    void write_row(const std::map<std::string, std::string> &values);
+    void writeTitle(const std::string& title);
+
+    void writeRow(const std::map<std::string, std::string> &values);
 };

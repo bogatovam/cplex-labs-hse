@@ -8,12 +8,11 @@
 
 int main() {
 
-    std::vector<std::string> test = {"graph", "best possible solution", "heuristic_result", "heuristic_time (sec)",
-                                     "heuristic_time (ms)", "cplex time (sec)", "cplex time (ms)", "result",
-                                     "result", "max_depth", "branches_num", "average_float_cplex_time",
-                                     "float_cplex_time"};
+    std::vector<std::string> test = {"graph", "best possible solution", "result", "heuristic_result", "timeout",
+                                     "time (sec)", "max_depth", "branches_num", "average_float_cplex_time"};
 
     CsvWriter csv_log("./", "results-" + utils::get_current_datetime_str() + ".csv", test);
+    csv_log.writeTitle("order  - 0 - 1, improved ind set, nearest to one");
     for (const auto &graph_name_and_best_solution: GRAPHS_NAMES) {
         CqlGraph graph = CqlGraph::readGraph("../../../graphs", graph_name_and_best_solution.first);
 //      graph::CqlGraph graph = graph::CqlGraph::readGraph("../../../graphs", graph_name);
@@ -22,7 +21,7 @@ int main() {
 
         log["graph"] = graph_name_and_best_solution.first;
         log["best possible solution"] = std::to_string(graph_name_and_best_solution.second);
-        csv_log.write_row(log);
+        csv_log.writeRow(log);
     }
     return 0;
 }

@@ -50,7 +50,7 @@ namespace max_clique_solver {
     class ExecutionContext {
     public:
         explicit ExecutionContext(std::size_t heuristic_size,
-                                  const steady_clock::duration& time_to_execute = minutes(2));
+                                  const steady_clock::duration &time_to_execute = minutes(2));
 
         FloatSolution optimal_solution;
 
@@ -83,13 +83,23 @@ namespace max_clique_solver {
     class BranchAndBoundExecutionContext : public ExecutionContext {
     public:
         explicit BranchAndBoundExecutionContext(size_t heuristic_size,
-                                                const steady_clock::duration& time_to_execute = minutes(2));
+                                                const steady_clock::duration &time_to_execute = minutes(2));
 
         void start(CplexModel &model);
 
         void branchAndBound(CplexModel &current_model);
 
         void branchAndBound(CplexModel &current_model, const FloatSolution &current_solution);
+    };
+
+    class BranchAndCutExecutionContext : public ExecutionContext {
+    public:
+        explicit BranchAndCutExecutionContext(size_t heuristic_size,
+                                              const steady_clock::duration &time_to_execute = minutes(2));
+
+        void start(CplexModel &model);
+
+        void branchAndCut(CplexModel &current_model);
     };
 
     CplexModel

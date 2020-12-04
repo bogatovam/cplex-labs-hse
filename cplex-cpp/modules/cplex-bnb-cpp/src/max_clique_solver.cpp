@@ -201,12 +201,8 @@ std::map<std::string, std::string> max_clique_solver::solve(const CqlGraph &grap
 
     auto heuristic_time = steady_clock::now() - begin;
 
-    BranchAndBoundExecutionContext bnb_context(best_clique.count());
-    try {
-        bnb_context.start(cplex_solver);
-    } catch (const std::exception &e) {
-        std::cout << "HERE" << e.what() << std::endl;
-    }
+    BranchAndBoundExecutionContext bnb_context(best_clique.count(), minutes(2));
+    bnb_context.start(cplex_solver);
 
     log["heuristic_time (sec)"] = std::to_string(duration_cast<seconds>(heuristic_time).count());
     log["heuristic_time (ms)"] = std::to_string(duration_cast<milliseconds>(heuristic_time).count());
@@ -219,10 +215,10 @@ std::map<std::string, std::string> max_clique_solver::solve(const CqlGraph &grap
     log["branches_num"] = std::to_string(bnb_context.metrics.branches_num);
     log["discarded_branches_num"] = std::to_string(bnb_context.metrics.discarded_branches_num);
     log["average_float_cplex_time"] =
-            std::to_string(duration_cast<milliseconds>(bnb_context.metrics.average_float_cplex_time).count());
-    log["float_cplex_time"] =
-            std::to_string(duration_cast<milliseconds>(bnb_context.metrics.float_cplex_time).count());
-
+            std::to_string(duration_cast<seconds>(bnb_context.metrics.average_float_cplex_time).count());
+    log["time (sec)"] = std::to_string(
+            duration_cast<seconds>(bnb_context.metrics.total_execution_time + heuristic_time).count());
+    log["timeout"] = std::to_string(bnb_context.timer.is_time_over);
     return log;
 }
 
@@ -369,7 +365,6 @@ void max_clique_solver::BranchAndBoundExecutionContext::branchAndBound(CplexMode
     }
 
     metrics.onStartBranch();
-
     metrics.onCplexFloatSolveStart();
     FloatSolution current_solution = current_model.getFloatSolution();
     metrics.onCplexFloatSolveFinish();
@@ -386,7 +381,7 @@ void max_clique_solver::BranchAndBoundExecutionContext::branchAndBound(CplexMode
         return;
     }
 
-    uint64_t branching_var = branchingFindNearestToOne(current_solution);
+    uint64_t branching_var = branchingFindNearestToInteger(current_solution);
 
     IloRange down_constraint = current_model.addEqualityConstraintToVariable(branching_var, lower_bound);
     branchAndBound(current_model);
@@ -448,5 +443,20 @@ void max_clique_solver::BranchAndBoundExecutionContext::branchAndBound(CplexMode
 }
 
 max_clique_solver::BranchAndBoundExecutionContext::BranchAndBoundExecutionContext(size_t heuristic_size,
-                                                                                  const steady_clock::duration& time_to_execute)
+                                                                                  const steady_clock::duration &time_to_execute)
         : ExecutionContext(heuristic_size, time_to_execute) {}
+
+max_clique_solver::BranchAndCutExecutionContext::BranchAndCutExecutionContext(size_t heuristic_size,
+                                                                              const steady_clock::duration &time_to_execute)
+        : ExecutionContext(heuristic_size, time_to_execute) {}
+
+void max_clique_solver::BranchAndCutExecutionContext::start(CplexModel &model) {
+    steady_clock::time_point begin = steady_clock::now();
+    branchAndCut(model);
+    metrics.total_execution_time = steady_clock::now() - begin;
+    metrics.average_float_cplex_time = metrics.float_cplex_time / metrics.branches_num;
+}
+
+void max_clique_solver::BranchAndCutExecutionContext::branchAndCut(CplexModel &current_model) {
+
+}

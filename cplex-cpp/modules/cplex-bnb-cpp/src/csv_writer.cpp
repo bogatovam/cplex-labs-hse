@@ -19,7 +19,7 @@ CsvWriter::CsvWriter(std::string fileName, std::string filePath,
     file_stream.close();
 }
 
-void CsvWriter::write_row(const std::map<std::string, std::string> &values) {
+void CsvWriter::writeRow(const std::map<std::string, std::string> &values) {
     file_stream.open(this->build_full_path(), std::ios::app);
 
     for (const std::string &column: this->columns) {
@@ -38,4 +38,11 @@ void CsvWriter::write_row(const std::map<std::string, std::string> &values) {
 
 std::string CsvWriter::build_full_path() {
     return this->file_path + "/" + this->file_name;
+}
+
+void CsvWriter::writeTitle(const std::string &title) {
+    file_stream.open(this->build_full_path(), std::ios::app);
+    file_stream << title;
+    file_stream << end_row;
+    file_stream.close();
 }
