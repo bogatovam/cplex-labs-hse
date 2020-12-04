@@ -9,7 +9,9 @@
 int main() {
 
     std::vector<std::string> test = {"graph", "best possible solution", "heuristic_result", "heuristic_time (sec)",
-                                     "heuristic_time (ms)", "cplex time (sec)", "cplex time (ms)", "result"};
+                                     "heuristic_time (ms)", "cplex time (sec)", "cplex time (ms)", "result",
+                                     "result", "max_depth", "branches_num", "average_float_cplex_time",
+                                     "float_cplex_time"};
 
     CsvWriter csv_log("./", "results-" + utils::get_current_datetime_str() + ".csv", test);
     for (const auto &graph_name_and_best_solution: GRAPHS_NAMES) {

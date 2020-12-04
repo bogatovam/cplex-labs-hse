@@ -9,6 +9,7 @@
 
 #include <include/cql_graph.h>
 #include "include/cplex_model.h"
+#include "shared.hpp"
 
 class CplexModel {
 private:
@@ -24,6 +25,8 @@ private:
 
     std::stringstream names_stream;
 
+    IloCplex cplex;
+
     IloRange buildConstraint(const std::set<uint64_t> &constraint, uint64_t lower_bound, uint64_t upper_bound);
 
 public:
@@ -33,5 +36,11 @@ public:
 
     void reduceModel();
 
-    uint64_t solveInteger(const CqlGraph &graph);
+    IloRange addEqualityConstraintToVariable(uint64_t variable, double equals_to);
+
+    FloatSolution getFloatSolution();
+
+    void deleteConstraint(const IloRange& constrain);
+
+    void addConstraint(const IloRange &constraint);
 };

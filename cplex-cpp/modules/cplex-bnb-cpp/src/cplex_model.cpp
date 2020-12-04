@@ -22,6 +22,9 @@ CplexModel::CplexModel(std::size_t variables_num) {
         obj_expr += x[i];
     IloObjective obj(env, obj_expr, IloObjective::Maximize);
     model.add(obj);
+
+    cplex = IloCplex(model);
+    cplex.setOut(env.getNullStream());
 }
 
 IloRange CplexModel::buildConstraint(const std::set<uint64_t> &constraint, uint64_t lower_bound, uint64_t upper_bound) {
@@ -29,12 +32,12 @@ IloRange CplexModel::buildConstraint(const std::set<uint64_t> &constraint, uint6
     names_stream.str(std::string());
     expr.clear();
 
-    names_stream << "constraint_";
     for (const auto &constraint_var: constraint) {
-        names_stream << constraint_var << "_";
+        names_stream << constraint_var << " + ";
         expr += x[constraint_var];
     }
 
+    names_stream << " <= 1";
     return {env, IloNum(lower_bound), expr, IloNum(upper_bound), names_stream.str().c_str()};
 }
 
@@ -47,38 +50,40 @@ void CplexModel::addConstraints(const std::set<std::set<uint64_t>> &constraints,
     for (const auto &constraint: constraints) {
         constraints_to_model[constraint_num++] = buildConstraint(constraint, lower_bound, upper_bound);
     }
-    model.add(constraints_to_model);
+    cplex.getModel().add(constraints_to_model);
 }
 
-void CplexModel::reduceModel() {
+IloRange CplexModel::addEqualityConstraintToVariable(uint64_t variable, double equals_to) {
+    std::string name = "x[" + std::to_string(variable) + "] = " + std::to_string(equals_to);
 
+    expr.clear();
+    expr += x[variable];
+    IloRange constraint = IloRange(env, (IloNum) equals_to, expr, (IloNum) equals_to, name.c_str());
+    cplex.getModel().add(constraint);
+    return constraint;
 }
 
-uint64_t CplexModel::solveInteger(const CqlGraph &graph) {
-    IloCplex cplex(model);
-//    cplex.exportModel("model.lp");
-
-    cplex.setOut(env.getNullStream());
-    bool solved = cplex.solve();
-
-    std::vector<uint64_t> res;
-    std::vector<double> vars;
-
-    auto n = graph.n_;
-    auto obj_val = cplex.getObjValue();
-    if (solved) {
-        for (int i = 0; i < n; ++i) {
-            auto val = cplex.getValue(x[i]);
-            vars.push_back(val);
-            if (val)
-                res.emplace_back(i);
-        }
+FloatSolution CplexModel::getFloatSolution() {
+    bool isSolved = cplex.solve();
+    if (!isSolved) {
+        cplex.exportModel("not_solved_model.lp");
+        throw std::runtime_error("It is impossible to solve CPLEX model. See 'not_solved_model.lp'");
     }
-
-//    std::cout << obj_val << std::endl;
-//    for (auto v: res) {
-//        std::cout << v << ",\t";
-//    }
-//    std::cout << std::endl;
-    return static_cast<uint64_t>(obj_val);
+    double result = cplex.getObjValue();
+    uint64_t size = x.getSize();
+    std::vector<double> result_vector(size, 0.0);
+    for (uint64_t i = 0; i < size; ++i) {
+        result_vector[i] = cplex.getValue(x[i]);
+    }
+    return {result, result_vector};
 }
+
+void CplexModel::deleteConstraint(const IloRange &constraint) {
+    cplex.getModel().remove(constraint);
+}
+
+void CplexModel::addConstraint(const IloRange &constraint) {
+    cplex.getModel().add(constraint);
+}
+
+
