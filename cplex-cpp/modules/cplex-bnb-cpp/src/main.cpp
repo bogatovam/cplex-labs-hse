@@ -9,10 +9,10 @@
 int main() {
 
     std::vector<std::string> test = {"graph", "best possible solution", "result", "heuristic_result", "timeout",
-                                     "time (sec)", "max_depth", "branches_num", "average_float_cplex_time"};
+                                     "time (sec)", "max_depth", "branches_num", "average_float_cplex_time", "discarded_branches_num"};
 
     CsvWriter csv_log("./", "results-" + utils::get_current_datetime_str() + ".csv", test);
-    csv_log.writeTitle("order  - 0 - 1, improved ind set, nearest to one");
+    csv_log.writeTitle("order  - greatest score first, improved ind set, nearest to integer");
     for (const auto &graph_name_and_best_solution: GRAPHS_NAMES) {
         CqlGraph graph = CqlGraph::readGraph("../../../graphs", graph_name_and_best_solution.first);
 //      graph::CqlGraph graph = graph::CqlGraph::readGraph("../../../graphs", graph_name);

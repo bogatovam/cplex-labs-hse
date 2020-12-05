@@ -50,7 +50,8 @@ namespace max_clique_solver {
     class ExecutionContext {
     public:
         explicit ExecutionContext(std::size_t heuristic_size,
-                                  const steady_clock::duration &time_to_execute = minutes(2));
+                                  const steady_clock::duration &time_to_execute,
+                                  const CqlGraph &graph);
 
         FloatSolution optimal_solution;
 
@@ -58,15 +59,13 @@ namespace max_clique_solver {
 
         Timer timer;
 
+        const CqlGraph &graph;
+
         const double lower_bound = 0.0;
 
         const double upper_bound = 1.0;
 
-        static bool isNumberInteger(double number);
-
-        static bool isNumberCloseToInteger(double number, double eps = 0.0001);
-
-        static double roundWithEpsilon(double objective_function_value, double eps = 0.0001);
+        static double roundWithEpsilon(double objective_function_value, double eps = 0.00001);
 
         static bool isResultInteger(const std::vector<double> &result);
 
@@ -78,28 +77,17 @@ namespace max_clique_solver {
 
         static uint64_t branchingFindNearestToMiddle(const FloatSolution &solution);
 
-    };
-
-    class BranchAndBoundExecutionContext : public ExecutionContext {
-    public:
-        explicit BranchAndBoundExecutionContext(size_t heuristic_size,
-                                                const steady_clock::duration &time_to_execute = minutes(2));
-
         void start(CplexModel &model);
 
         void branchAndBound(CplexModel &current_model);
 
         void branchAndBound(CplexModel &current_model, const FloatSolution &current_solution);
-    };
 
-    class BranchAndCutExecutionContext : public ExecutionContext {
-    public:
-        explicit BranchAndCutExecutionContext(size_t heuristic_size,
-                                              const steady_clock::duration &time_to_execute = minutes(2));
+        void branchAndCut(CplexModel &current_model, const FloatSolution &current_solution);
 
-        void start(CplexModel &model);
+        std::set<std::set<uint64_t>> separation(const FloatSolution &solution);
 
-        void branchAndCut(CplexModel &current_model);
+        std::set<std::set<uint64_t>> checkSolution(const FloatSolution &solution);
     };
 
     CplexModel
@@ -123,4 +111,5 @@ namespace max_clique_solver {
     void improveIndependentSetByOne(const CqlGraph &graph,
                                     const std::set<uint64_t> &independent_set,
                                     std::set<std::set<uint64_t>> &result);
+
 }

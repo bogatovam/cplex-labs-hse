@@ -27,6 +27,8 @@ private:
 
     IloCplex cplex;
 
+    std::vector<IloRange> all_constraints;
+
     IloRange buildConstraint(const std::set<uint64_t> &constraint, uint64_t lower_bound, uint64_t upper_bound);
 
 public:
@@ -34,13 +36,15 @@ public:
 
     void addConstraints(const std::set<std::set<uint64_t>> &constraints, uint64_t lower_bound, uint64_t upper_bound);
 
-    void reduceModel();
+    void reduceModel(std::size_t limit = 1000);
 
     IloRange addEqualityConstraintToVariable(uint64_t variable, double equals_to);
 
     FloatSolution getFloatSolution();
 
-    void deleteConstraint(const IloRange& constrain);
+    void deleteConstraint(const IloRange &constrain);
 
     void addConstraint(const IloRange &constraint);
+
+    void addConstraint(const std::set<uint64_t> &constraint, uint64_t lower_bound, uint64_t upper_bound);
 };

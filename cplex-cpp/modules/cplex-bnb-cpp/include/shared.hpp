@@ -8,6 +8,22 @@
 #include <thread>
 #include <Windows.h>
 
+
+bool isNumberInteger(double number) {
+    double int_part;
+    return modf(number, &int_part) == 0.0;
+}
+
+bool isNumberCloseToInteger(double number, double eps = 0.00001) {
+    double up = std::ceil(number);
+    double down = std::floor(number);
+
+    if (number + eps > up || number - eps < down) {
+        return true;
+    }
+    return false;
+}
+
 template<class T>
 class Solution {
 public:
@@ -16,10 +32,46 @@ public:
 
     T values;
 
+    uint64_t integer_variables_num = 0;
+
     Solution &operator=(const Solution &other) {
         this->size = std::move(other.size);
         this->values = std::move(other.values);
+        this->other = std::move(other.integer_variables_num);
         return *this;
+    }
+
+    Solution(double size, T values) : size(size), values(values) {
+        this->integer_variables_num = countIntegers(values);
+    }
+
+    uint64_t countIntegers(const T &result) {
+        uint64_t count = 0;
+        for (const double &element: result) {
+            if (isNumberInteger(element) || isNumberCloseToInteger(element)) {
+                count++;
+            }
+        }
+    }
+
+    std::set<uint64_t> extractResult() const {
+        std::set<uint64_t> clique;
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            if (values[i] == 1.0) {
+                clique.insert(i);
+            }
+        }
+        return clique;
+    }
+
+    void printInfo() const {
+        std::cout << "Solution:\t" << std::endl;
+        for (const double &element: values) {
+            std::cout << element << ",\t" << std::endl;
+        }
+        std::cout << std::endl;
+        std::cout << "OBJ VALUE:\t" << size << std::endl;
+        std::cout << "INTEGERS COUNT:\t" << integer_variables_num << std::endl;
     }
 };
 
@@ -42,8 +94,9 @@ public:
     }
 
     ~Timer() {
-        if (!is_time_over)
+        if (!is_time_over) {
             TerminateThread(timer.native_handle(), 0);
+        }
         timer.join();
     }
 

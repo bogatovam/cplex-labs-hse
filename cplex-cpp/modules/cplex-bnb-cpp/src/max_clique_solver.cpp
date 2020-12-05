@@ -201,8 +201,12 @@ std::map<std::string, std::string> max_clique_solver::solve(const CqlGraph &grap
 
     auto heuristic_time = steady_clock::now() - begin;
 
-    BranchAndBoundExecutionContext bnb_context(best_clique.count(), minutes(2));
-    bnb_context.start(cplex_solver);
+    ExecutionContext bnb_context(best_clique.count(), hours(1), graph);
+    try {
+        bnb_context.start(cplex_solver);
+    } catch (const std::exception &e) {
+        std::cout << "HERE" << e.what() << std::endl;
+    }
 
     log["heuristic_time (sec)"] = std::to_string(duration_cast<seconds>(heuristic_time).count());
     log["heuristic_time (ms)"] = std::to_string(duration_cast<milliseconds>(heuristic_time).count());
@@ -215,7 +219,9 @@ std::map<std::string, std::string> max_clique_solver::solve(const CqlGraph &grap
     log["branches_num"] = std::to_string(bnb_context.metrics.branches_num);
     log["discarded_branches_num"] = std::to_string(bnb_context.metrics.discarded_branches_num);
     log["average_float_cplex_time"] =
-            std::to_string(duration_cast<seconds>(bnb_context.metrics.average_float_cplex_time).count());
+            std::to_string(duration_cast<milliseconds>(bnb_context.metrics.average_float_cplex_time).count());
+    log["float_cplex_time"] =
+            std::to_string(duration_cast<milliseconds>(bnb_context.metrics.float_cplex_time).count());
     log["time (sec)"] = std::to_string(
             duration_cast<seconds>(bnb_context.metrics.total_execution_time + heuristic_time).count());
     log["timeout"] = std::to_string(bnb_context.timer.is_time_over);
@@ -243,21 +249,6 @@ std::bitset<1024> max_clique_solver::getBestMaxClique(const CqlGraph &graph,
     }
     best_clique = graph.localSearch(best_clique);
     return best_clique;
-}
-
-bool max_clique_solver::ExecutionContext::isNumberInteger(double number) {
-    double int_part;
-    return modf(number, &int_part) == 0.0;
-}
-
-bool max_clique_solver::ExecutionContext::isNumberCloseToInteger(double number, double eps) {
-    double up = std::ceil(number);
-    double down = std::floor(number);
-
-    if (number + eps > up || number - eps < down) {
-        return true;
-    }
-    return false;
 }
 
 double max_clique_solver::ExecutionContext::roundWithEpsilon(double objective_function_value,
@@ -348,18 +339,20 @@ uint64_t max_clique_solver::ExecutionContext::branchingFindNearestToMiddle(const
 }
 
 max_clique_solver::ExecutionContext::ExecutionContext(std::size_t heuristic_size,
-                                                      const steady_clock::duration &time_to_execute) :
+                                                      const steady_clock::duration &time_to_execute,
+                                                      const CqlGraph &graph) :
         optimal_solution({static_cast<double>(heuristic_size), std::vector<double>()}),
-        timer(time_to_execute) {}
+        timer(time_to_execute),
+        graph(graph) {}
 
-void max_clique_solver::BranchAndBoundExecutionContext::start(CplexModel &model) {
+void max_clique_solver::ExecutionContext::start(CplexModel &model) {
     steady_clock::time_point begin = steady_clock::now();
     branchAndBound(model);
     metrics.total_execution_time = steady_clock::now() - begin;
     metrics.average_float_cplex_time = metrics.float_cplex_time / metrics.branches_num;
 }
 
-void max_clique_solver::BranchAndBoundExecutionContext::branchAndBound(CplexModel &current_model) {
+void max_clique_solver::ExecutionContext::branchAndBound(CplexModel &current_model) {
     if (timer.is_time_over) {
         return;
     }
@@ -394,8 +387,8 @@ void max_clique_solver::BranchAndBoundExecutionContext::branchAndBound(CplexMode
     metrics.onFinishBranch();
 }
 
-void max_clique_solver::BranchAndBoundExecutionContext::branchAndBound(CplexModel &current_model,
-                                                                       const FloatSolution &current_solution) {
+void max_clique_solver::ExecutionContext::branchAndBound(CplexModel &current_model,
+                                                         const FloatSolution &current_solution) {
     if (timer.is_time_over) {
         return;
     }
@@ -414,7 +407,7 @@ void max_clique_solver::BranchAndBoundExecutionContext::branchAndBound(CplexMode
         return;
     }
 
-    uint64_t branching_var = branchingFindNearestToOne(current_solution);
+    uint64_t branching_var = branchingFindNearestToInteger(current_solution);
 
     IloRange down_constraint = current_model.addEqualityConstraintToVariable(branching_var, lower_bound);
     metrics.onCplexFloatSolveStart();
@@ -442,21 +435,133 @@ void max_clique_solver::BranchAndBoundExecutionContext::branchAndBound(CplexMode
     metrics.onFinishBranch();
 }
 
-max_clique_solver::BranchAndBoundExecutionContext::BranchAndBoundExecutionContext(size_t heuristic_size,
-                                                                                  const steady_clock::duration &time_to_execute)
-        : ExecutionContext(heuristic_size, time_to_execute) {}
+void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model,
+                                                       const FloatSolution &current_solution) {
+    if (timer.is_time_over) {
+        return;
+    }
+    current_solution.printInfo();
+    metrics.onStartBranch();
 
-max_clique_solver::BranchAndCutExecutionContext::BranchAndCutExecutionContext(size_t heuristic_size,
-                                                                              const steady_clock::duration &time_to_execute)
-        : ExecutionContext(heuristic_size, time_to_execute) {}
+    double current_solution_size = roundWithEpsilon(current_solution.size);
 
-void max_clique_solver::BranchAndCutExecutionContext::start(CplexModel &model) {
-    steady_clock::time_point begin = steady_clock::now();
-    branchAndCut(model);
-    metrics.total_execution_time = steady_clock::now() - begin;
-    metrics.average_float_cplex_time = metrics.float_cplex_time / metrics.branches_num;
+    if (this->optimal_solution.size > current_solution_size) {
+        metrics.onDiscardedBranch();
+        return;
+    }
+
+    double delta = 1e2;
+    double max_upper_bound_delta = 0.0;
+    double previous_upper_bound = current_solution_size;
+    uint64_t iteration_period = 10;
+
+    uint64_t iteration_count = 0;
+
+    FloatSolution enhanced_solution = current_solution;
+    while (true) {
+        iteration_count++;
+
+        if (iteration_count % iteration_period == 0) {
+            if (max_upper_bound_delta > delta) {
+                break;
+            }
+            max_upper_bound_delta = 0.0;
+        }
+        std::set<std::set<uint64_t>> violated_constraint = separation(current_solution);
+
+        if (violated_constraint.empty()) {
+            break;
+        }
+
+        current_model.addConstraints(violated_constraint, lower_bound, upper_bound);
+        enhanced_solution = current_model.getFloatSolution();
+
+        if (this->optimal_solution.size > roundWithEpsilon(enhanced_solution.size)) {
+            metrics.onDiscardedBranch();
+            return;
+        }
+
+        if (enhanced_solution.integer_variables_num == enhanced_solution.values.size()) {
+            break;
+        }
+
+        max_upper_bound_delta = max(std::fabs(enhanced_solution.size - previous_upper_bound), max_upper_bound_delta);
+        previous_upper_bound = enhanced_solution.size;
+        current_model.reduceModel();
+    }
+
+    if (enhanced_solution.integer_variables_num == enhanced_solution.values.size()) {
+        std::set<std::set<uint64_t>> violatedNonEdgeConstraints = checkSolution(enhanced_solution);
+        if (violatedNonEdgeConstraints.empty()) {
+            this->optimal_solution = current_solution;
+            return;
+        }
+    }
+
+    uint64_t branching_var = branchingFindNearestToInteger(current_solution);
+
+    IloRange down_constraint = current_model.addEqualityConstraintToVariable(branching_var, lower_bound);
+    metrics.onCplexFloatSolveStart();
+    FloatSolution down_solution = current_model.getFloatSolution();
+    metrics.onCplexFloatSolveFinish();
+    current_model.deleteConstraint(down_constraint);
+
+    IloRange up_constraint = current_model.addEqualityConstraintToVariable(branching_var, upper_bound);
+    metrics.onCplexFloatSolveStart();
+    FloatSolution up_solution = current_model.getFloatSolution();
+    metrics.onCplexFloatSolveFinish();
+    current_model.deleteConstraint(up_constraint);
+
+    std::vector<std::pair<IloRange, FloatSolution> > branches = {{down_constraint, down_solution},
+                                                                 {up_constraint,   up_solution}};
+    if (down_solution.integer_variables_num < up_solution.integer_variables_num ||
+        (down_solution.integer_variables_num == up_solution.integer_variables_num &&
+         down_solution.size < up_solution.size)) {
+        std::swap(branches[0], branches[1]);
+        std::cout << "Order: UP, DOWN: \t("
+                  << up_solution.integer_variables_num << "," << up_solution.size << "),\t("
+                  << down_solution.integer_variables_num << "," << down_solution.size << ")" << std::endl;
+    } else {
+        std::cout << "Order: DOWN, UP \t("
+                  << down_solution.integer_variables_num << "," << down_solution.size << "),\t("
+                  << up_solution.integer_variables_num << "," << up_solution.size << ")" << std::endl;
+    }
+
+    for (const auto &branch: branches) {
+        std::cout << "BRANCHING: \t("
+                  << branch.second.integer_variables_num << "," << branch.second.size << ")" << std::endl;
+
+        current_model.addConstraint(branch.first);
+        branchAndBound(current_model, branch.second);
+        current_model.deleteConstraint(branch.first);
+    }
+    metrics.onFinishBranch();
 }
 
-void max_clique_solver::BranchAndCutExecutionContext::branchAndCut(CplexModel &current_model) {
 
+std::set<std::set<uint64_t>> max_clique_solver::ExecutionContext::separation(
+        const FloatSolution &solution) {
+
+    return std::set<std::set<uint64_t>>();
 }
+
+std::set<std::set<uint64_t>> max_clique_solver::ExecutionContext::checkSolution(
+        const FloatSolution &solution) {
+    std::cout << "CHECK INTEGER SOLUTION:\t(" << solution.size << ", " << solution.integer_variables_num << ")"
+              << std::endl;
+    solution.printInfo();
+
+    std::set<uint64_t> clique = solution.extractResult();
+
+    std::set<std::set<uint64_t>> violatedNonEdgeConstraints;
+
+    for (const uint64_t v1: clique) {
+        for (const uint64_t v2: clique) {
+            if (v1 != v2 && !(graph.confusion_matrix_bit_set_[v1][v2])) {
+                violatedNonEdgeConstraints.insert(std::set<uint64_t>{v1, v2});
+            }
+        }
+    }
+    return violatedNonEdgeConstraints;
+}
+

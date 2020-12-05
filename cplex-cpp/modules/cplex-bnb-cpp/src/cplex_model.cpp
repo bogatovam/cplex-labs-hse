@@ -48,9 +48,18 @@ void CplexModel::addConstraints(const std::set<std::set<uint64_t>> &constraints,
 
     std::size_t constraint_num = 0;
     for (const auto &constraint: constraints) {
+        IloRange current_constraint = buildConstraint(constraint, lower_bound, upper_bound);
+
+        all_constraints.push_back(current_constraint);
         constraints_to_model[constraint_num++] = buildConstraint(constraint, lower_bound, upper_bound);
     }
     cplex.getModel().add(constraints_to_model);
+}
+
+void CplexModel::addConstraint(const std::set<uint64_t> &constraint,
+                               uint64_t lower_bound,
+                               uint64_t upper_bound) {
+    addConstraint(buildConstraint(constraint, lower_bound, upper_bound));
 }
 
 IloRange CplexModel::addEqualityConstraintToVariable(uint64_t variable, double equals_to) {
@@ -59,7 +68,7 @@ IloRange CplexModel::addEqualityConstraintToVariable(uint64_t variable, double e
     expr.clear();
     expr += x[variable];
     IloRange constraint = IloRange(env, (IloNum) equals_to, expr, (IloNum) equals_to, name.c_str());
-    cplex.getModel().add(constraint);
+    addConstraint(constraint);
     return constraint;
 }
 
@@ -83,7 +92,24 @@ void CplexModel::deleteConstraint(const IloRange &constraint) {
 }
 
 void CplexModel::addConstraint(const IloRange &constraint) {
+    all_constraints.push_back(constraint);
     cplex.getModel().add(constraint);
+}
+
+void CplexModel::reduceModel(std::size_t limit) {
+    if (all_constraints.size() > limit) {
+        all_constraints.erase(std::remove_if(
+                all_constraints.begin(), all_constraints.end(),
+                [&](const IloRange &constraint) {
+                    double slack = cplex.getSlack(constraint);
+                    if (slack > 0.0) {
+                        std::cout << "Constraint " << constraint.getName() << " was deleted, slack:=" << slack
+                                  << std::endl;
+                        cplex.getModel().remove(constraint);
+                    }
+                    return slack > 0.0;
+                }), all_constraints.end());
+    }
 }
 
 
