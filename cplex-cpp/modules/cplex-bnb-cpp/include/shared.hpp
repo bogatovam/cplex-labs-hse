@@ -52,6 +52,7 @@ public:
                 count++;
             }
         }
+        return count;
     }
 
     std::set<uint64_t> extractResult() const {
@@ -103,3 +104,11 @@ public:
 private:
     std::thread timer;
 };
+
+std::bitset<1024> asBitset(const std::set<uint64_t> &set) {
+    std::bitset<1024> result;
+    for (const uint64_t &element: set) {
+        result.set(element, true);
+    }
+    return result;
+}

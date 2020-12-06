@@ -12,7 +12,8 @@ enum class NodesOrderingStrategy {
     SMALLEST_DEGREE_FIRST,
     SMALLEST_DEGREE_SUPPORT_FIRST,
     RANDOM,
-    SATURATION_SMALLEST_FIRST
+    SATURATION_SMALLEST_FIRST,
+    SMALLEST_DEGREE_SUPPORT_FIRST_WEIGHTED
 };
 
 static const std::vector<NodesOrderingStrategy> nodes_ordering_strategies = {
@@ -102,4 +103,11 @@ public:
     uint64_t findCliqueBestCandidate(const std::vector<uint64_t> &vector, CqlGraph graph) const;
 
     bool isVerticesIndependent(std::set<uint64_t> &independent_set) const;
+
+    std::set<std::set<uint64_t >> findWeightedIndependentSet(const std::vector<double> &weights) const;
+
+    std::vector<uint64_t>
+    orderVerticesSaturationSmallestFirstWeighted(std::vector<uint64_t> vertices, const std::vector<double> &wights) const;
+
+    std::map<uint64_t, std::set<uint64_t>> colorWeightedGraph(const std::vector<double> &wights) const;
 };

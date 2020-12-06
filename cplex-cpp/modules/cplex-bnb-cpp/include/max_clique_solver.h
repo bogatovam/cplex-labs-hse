@@ -85,9 +85,41 @@ namespace max_clique_solver {
 
         void branchAndCut(CplexModel &current_model, const FloatSolution &current_solution);
 
-        std::set<std::set<uint64_t>> separation(const FloatSolution &solution);
+        std::set<std::set<uint64_t>> separation(const FloatSolution &solution, std::size_t max_iteration = 10);
 
         std::set<std::set<uint64_t>> checkSolution(const FloatSolution &solution);
+
+        std::bitset<1024> localSearch(const std::bitset<1024> &current_set,
+                                      const std::vector<double> &weights);
+
+        std::bitset<1024> perturb(const std::bitset<1024> &current_set, std::size_t k = 1);
+
+        std::vector<uint64_t> calculateTightness(std::bitset<1024> set, std::bitset<1024> possible_candidates) const;
+
+        std::map<uint64_t, std::bitset<1024>>
+        build12SwapCandidatesSet(std::bitset<1024> set, std::bitset<1024> possible_candidates,
+                                 const std::vector<uint64_t> &tightness) const;
+
+        std::pair<uint64_t, uint64_t> findFirst12Swap(double w_to_delete, std::bitset<1024> candidates,
+                                                      const std::vector<double> &weights) const;
+
+        void updateSetAndCandidates(std::bitset<1024> &current_set,
+                                    std::vector<uint64_t> tightness,
+                                    std::map<uint64_t, std::bitset<1024>> candidates,
+                                    uint64_t deleted,
+                                    std::pair<uint64_t, uint64_t> inserted,
+                                    std::vector<double> weights_diff,
+                                    const std::vector<double>& weights);
+
+        std::vector<double> calculateWeightsDiff(std::bitset<1024> set, const std::vector<double> &weights);
+
+        void updateSetAndCandidates(std::bitset<1024> &current_set,
+                                    std::vector<uint64_t> tightness,
+                                    std::bitset<1024> deleted, uint64_t inserted,
+                                    std::vector<double> weights_diff,
+                                    const std::vector<double> &weights);
+
+        double weight(std::bitset<1024> independent_set, const std::vector<double> &weights);
     };
 
     CplexModel

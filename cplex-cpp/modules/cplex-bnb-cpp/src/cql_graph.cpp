@@ -201,6 +201,43 @@ std::pair<std::vector<uint64_t>, uint64_t> CqlGraph::colorGraph(const NodesOrder
     return {colored_vertices, max_color};
 }
 
+std::map<uint64_t, std::set<uint64_t>> CqlGraph::colorWeightedGraph(const std::vector<double> &wights) const {
+    std::vector<uint64_t> vertices(n_, 0);
+    std::iota(vertices.begin(), vertices.end(), 0);
+
+    std::vector<uint64_t> ordered_vertices = orderVerticesSaturationSmallestFirstWeighted(vertices, wights);
+
+    uint64_t max_color = 0;
+    std::map<uint64_t, std::set<uint64_t>> coloring;
+    std::vector<uint64_t> colored_vertices(n_, UINT64_MAX);
+
+    std::vector<bool> used_colors(n_, false);
+
+    for (const uint64_t v: ordered_vertices) {
+        for (const uint64_t neighbor: adjacency_lists_[v]) {
+            if (colored_vertices[neighbor] != UINT64_MAX) {
+                used_colors[colored_vertices[neighbor]] = true;
+            }
+        }
+
+        std::size_t min_color = 0;
+        while (used_colors[min_color]) min_color++;
+
+        max_color = std::max(min_color, max_color);
+        colored_vertices[v] = min_color;
+        coloring[min_color].insert(v);
+
+        std::fill(used_colors.begin(), used_colors.end(), 0);
+    }
+#ifdef CHECK_SOLUTION
+    if (!isColoringCorrect(colored_vertices)) {
+        std::cout << "this coloring is not correct" << std::endl;
+        throw std::runtime_error("this coloring is not correct");
+    }
+#endif
+    return coloring;
+}
+
 std::vector<uint64_t> CqlGraph::orderVertices(const NodesOrderingStrategy &strategy) const {
     std::vector<uint64_t> vertices(n_, 0);
     std::iota(vertices.begin(), vertices.end(), 0);
@@ -556,4 +593,65 @@ bool CqlGraph::isVerticesIndependent(std::set<uint64_t> &independent_set) const 
         }
     }
     return true;
+}
+
+std::set<std::set<uint64_t >> CqlGraph::findWeightedIndependentSet(const std::vector<double> &weights) const {
+    // get init independent sets
+    auto coloring = colorWeightedGraph(weights);
+    std::set<std::set<uint64_t>> result;
+    for (const auto &color_pair: coloring) {
+        std::set<uint64_t> independent_set = color_pair.second;
+        double weight = 0.0;
+        for (const auto &v: independent_set) {
+            weight += weights[v];
+        }
+        if (weight > 1.0) {
+            result.emplace(independent_set);
+        }
+    }
+    return result;
+}
+
+std::vector<uint64_t> CqlGraph::orderVerticesSaturationSmallestFirstWeighted(std::vector<uint64_t> vertices,
+                                                                             const std::vector<double> &wights) const {
+    std::vector<uint64_t> mutable_degrees(n_, 0);
+    std::vector<uint64_t> support = verticesSupport();
+    std::vector<uint64_t> ordered_vertices;
+
+    for (std::size_t i = 0; i < n_; ++i) {
+        mutable_degrees[i] = degree(i);
+    }
+
+    auto set_function = [&](uint64_t i, uint64_t j) {
+        return (wights[i] > wights[j]) ||
+               (wights[i] == wights[j] && mutable_degrees[i] < mutable_degrees[j]) ||
+               (wights[i] == wights[j] && (mutable_degrees[i] == mutable_degrees[j]) && (support[i] < support[j])) ||
+               (wights[i] == wights[j] && (mutable_degrees[i] == mutable_degrees[j]) && (support[i] == support[j]) &&
+                i < j);
+    };
+
+
+    std::set<uint64_t, decltype(set_function)> degree_support_index_queue(set_function);
+    degree_support_index_queue.insert(vertices.begin(), vertices.end());
+
+    while (!degree_support_index_queue.empty()) {
+        uint64_t next_vertex = *degree_support_index_queue.begin();
+        degree_support_index_queue.erase(degree_support_index_queue.begin());
+
+        mutable_degrees[next_vertex] = 0;
+
+        ordered_vertices.push_back(next_vertex);
+
+        for (const uint64_t neighbor: adjacency_lists_[next_vertex]) {
+            // check if vertex already in ordered vertexes
+            if (mutable_degrees[neighbor] != 0) {
+                degree_support_index_queue.erase(neighbor);
+                mutable_degrees[neighbor]--;
+                // Let's don't connect mutable_degrees and support. It is simpler
+                support[neighbor] -= degree(next_vertex);
+                degree_support_index_queue.insert(neighbor);
+            }
+        }
+    }
+    return ordered_vertices;
 }

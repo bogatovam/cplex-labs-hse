@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <thread>
+#include <random>
 #include "include/max_clique_solver.h"
 
 //#define CHECK_SOLUTION
@@ -540,8 +541,26 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
 
 
 std::set<std::set<uint64_t>> max_clique_solver::ExecutionContext::separation(
-        const FloatSolution &solution) {
+        const FloatSolution &solution,
+        std::size_t max_iteration) {
 
+    auto coloring_independent_sets = graph.findWeightedIndependentSet(solution.values);
+
+    for (const std::set<uint64_t> &S_0: coloring_independent_sets) {
+        std::bitset<1024> S = localSearch(asBitset(S_0), solution.values);
+        std::bitset<1024> S_best = S;
+
+        for (std::size_t iteration = 0; iteration < max_iteration; ++iteration) {
+            std::bitset<1024> S_;
+            S_ = perturb(S);
+            localSearch(S_, solution.values);
+//            acceptance
+
+            if (weight(S_, <#initializer#>) > weight(S, <#initializer#>)) {
+
+            }
+        }
+    }
     return std::set<std::set<uint64_t>>();
 }
 
@@ -565,3 +584,215 @@ std::set<std::set<uint64_t>> max_clique_solver::ExecutionContext::checkSolution(
     return violatedNonEdgeConstraints;
 }
 
+std::bitset<1024> max_clique_solver::ExecutionContext::localSearch(const std::bitset<1024> &current_set,
+                                                                   const std::vector<double> &weights) {
+    std::bitset<1024> result = current_set;
+    std::bitset<1024> possible_candidates = ~result;
+    std::vector<uint64_t> tightness = calculateTightness(result, possible_candidates);
+    std::vector<double> weights_diff = calculateWeightsDiff(result, weights);
+    std::map<uint64_t, std::bitset<1024>> candidates_1_2 = build12SwapCandidatesSet(result, possible_candidates,
+                                                                                    tightness);
+    for (std::pair<uint64_t, std::bitset<1024>> x_to_L_x: candidates_1_2) {
+        if (x_to_L_x.second.count() < 2) {
+            std::cout << "too few candidates" << std::endl;
+            continue;
+        }
+
+        std::pair<uint64_t, uint64_t> swap = findFirst12Swap(x_to_L_x.first, x_to_L_x.second, weights);
+
+        if (swap.first == UINT64_MAX) {
+            std::cout << "Cannot found connected vertices" << std::endl;
+            continue;
+        }
+
+        std::cout << "Increase by 1!!!" << std::endl;
+        updateSetAndCandidates(result, tightness, candidates_1_2, x_to_L_x.first, swap, weights_diff,
+                               std::vector<double>());
+    }
+    auto set_function = [&](uint64_t i, uint64_t j) {
+        return (weights_diff[i] > weights_diff[j]) || (weights_diff[i] == weights_diff[j] && i < j);
+    };
+    std::set<uint64_t, decltype(set_function)> w1_swap_candidates(set_function);
+
+    for (std::size_t v = 0; v < graph.n_; ++v) {
+        if (result[v] || weights_diff[v] <= 0) continue;
+        w1_swap_candidates.insert(v);
+    }
+    std::bitset<1024> deleted_neighbors;
+
+    for (auto v: w1_swap_candidates) {
+        deleted_neighbors &= graph.confusion_matrix_bit_set_[v];
+        if ((deleted_neighbors & graph.confusion_matrix_bit_set_[v]).count() != 0) {
+            continue;
+        }
+        updateSetAndCandidates(result,
+                               tightness,
+                               graph.confusion_matrix_bit_set_[v],
+                               v,
+                               weights_diff,
+                               weights);
+        deleted_neighbors |= graph.confusion_matrix_bit_set_[v];
+    }
+    return result;
+}
+
+std::bitset<1024> max_clique_solver::ExecutionContext::perturb(const std::bitset<1024> &current_set, std::size_t k) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::bitset<1024> candidates = ~current_set;
+    std::uniform_int_distribution<> distrib(0, candidates.count() - 1);
+    std::bitset<1024> result = current_set;
+
+    for (std::size_t i = 0; i < k; ++i) {
+        std::size_t vertex_to_insert = distrib(gen);
+        std::size_t index_vertex_to_insert = 0;
+        std::size_t skipped = 0;
+        while (candidates[index_vertex_to_insert] && skipped != vertex_to_insert) {
+            index_vertex_to_insert++;
+            if (candidates[index_vertex_to_insert]) skipped++;
+        }
+
+        result = result & (~graph.confusion_matrix_bit_set_[index_vertex_to_insert]);
+        result.set(index_vertex_to_insert, true);
+    }
+    return result;
+}
+
+std::pair<uint64_t, uint64_t> max_clique_solver::ExecutionContext::findFirst12Swap(double w_to_delete,
+                                                                                   std::bitset<1024> candidates,
+                                                                                   const std::vector<double> &weights) const {
+    for (std::size_t v = 0; v < graph.n_; ++v) {
+        if (!candidates[v]) continue;
+        for (std::size_t u = v + 1; v < graph.n_; ++u) {
+            if (!candidates[u]) continue;
+            if (!graph.confusion_matrix_bit_set_[v][u] && w_to_delete > weights[u] + weights[v]) {
+                return {v, u};
+            }
+        }
+    }
+    return {UINT64_MAX, UINT64_MAX};
+}
+
+//tightness - количетво соседей не принадлежащей решению вершины которые в множестве
+std::vector<uint64_t> max_clique_solver::ExecutionContext::calculateTightness(std::bitset<1024> set,
+                                                                              std::bitset<1024> possible_candidates) const {
+    std::vector<uint64_t> tightness(graph.n_, 0);
+
+    for (std::size_t v = 0; v < graph.n_; ++v) {
+        if (possible_candidates[v]) {
+            tightness[v] = ((graph.confusion_matrix_bit_set_[v]) & set).count();
+        }
+    }
+    return tightness;
+}
+
+std::map<uint64_t, std::bitset<1024>>
+max_clique_solver::ExecutionContext::build12SwapCandidatesSet(std::bitset<1024> set,
+                                                              std::bitset<1024> possible_candidates,
+                                                              const std::vector<uint64_t> &tightness) const {
+    std::map<uint64_t, std::bitset<1024>> candidates_per_vertex;
+    std::bitset<1024> free_vertices;
+
+    for (std::size_t v = 0; v < graph.n_; ++v) {
+        if (possible_candidates[v]) {
+            // посчитать сколько соседей лежат в независемом множестве
+            if (tightness[v] == 0) {
+                free_vertices.set(v, true);
+            } else if (tightness[v] == 1) {
+                std::bitset<1024> neighbor_in_independent_set = graph.confusion_matrix_bit_set_[v] & set;
+                if (neighbor_in_independent_set.count() == 1) {
+                    //найти первую и единственную вершину
+                    uint64_t u = 0;
+                    while (!neighbor_in_independent_set.test(u)) u++;
+                    candidates_per_vertex[u].set(v, true);
+                }
+            }
+        }
+    }
+    if (free_vertices.count() > 0) {
+        // потому что есть такие вешины, которые не соединены ни с какой вершинов в множестве
+        // и их можно добавить в паре вместе с удалением любой вершины
+        for (std::pair<uint64_t, std::bitset<1024>> entry: candidates_per_vertex) {
+            entry.second |= free_vertices;
+        }
+    }
+
+    return candidates_per_vertex;
+}
+
+void max_clique_solver::ExecutionContext::updateSetAndCandidates(std::bitset<1024> &current_set,
+                                                                 std::vector<uint64_t> tightness,
+                                                                 std::map<uint64_t, std::bitset<1024>> candidates,
+                                                                 uint64_t deleted,
+                                                                 std::pair<uint64_t, uint64_t> inserted,
+                                                                 std::vector<double> weights_diff,
+                                                                 const std::vector<double> &weights) {
+    uint64_t inserted_connected_to_deleted =
+            graph.confusion_matrix_bit_set_[deleted][inserted.first] +
+            graph.confusion_matrix_bit_set_[deleted][inserted.second];
+
+    tightness[deleted] = inserted_connected_to_deleted;
+
+    current_set.set(deleted, false);
+    current_set.set(inserted.first, true);
+    current_set.set(inserted.second, true);
+
+    for (const auto &neighbor: graph.adjacency_lists_[inserted.first]) {
+        weights_diff[neighbor] -= weights[inserted.first];
+        tightness[neighbor] += 1;
+    }
+    for (const auto &neighbor: graph.adjacency_lists_[inserted.second]) {
+        weights_diff[neighbor] -= weights[inserted.second];
+        tightness[neighbor] += 1;
+    }
+    for (const auto &neighbor: graph.adjacency_lists_[deleted]) {
+        weights_diff[neighbor] += weights[deleted];
+    }
+}
+
+void max_clique_solver::ExecutionContext::updateSetAndCandidates(std::bitset<1024> &current_set,
+                                                                 std::vector<uint64_t> tightness,
+                                                                 std::bitset<1024> deleted, uint64_t inserted,
+                                                                 std::vector<double> weights_diff,
+                                                                 const std::vector<double> &weights) {
+
+
+    current_set &= ~deleted;
+    current_set.set(inserted, true);
+
+    for (const auto &neighbor: graph.adjacency_lists_[inserted]) {
+        weights_diff[neighbor] -= weights[inserted];
+        tightness[neighbor] += 1;
+    }
+
+    for (std::size_t v = 0; v < graph.n_; ++v) {
+        if (!deleted[v]) continue;
+        for (const auto &neighbor: graph.adjacency_lists_[v]) {
+            weights_diff[neighbor] += weights[v];
+        }
+    }
+}
+
+std::vector<double>
+max_clique_solver::ExecutionContext::calculateWeightsDiff(std::bitset<1024> set, const std::vector<double> &weights) {
+    std::vector<double> result(weights);
+
+    for (std::size_t i = 0; i < graph.n_; ++i) {
+        std::bitset<1024> neighbor_in_independent_set = graph.confusion_matrix_bit_set_[i] & set;
+        for (std::size_t j = 0; j < graph.n_; ++j) {
+            if (!neighbor_in_independent_set[j]) continue;
+            result[i] -= weights[j];
+        }
+    }
+    return result;
+}
+
+double max_clique_solver::ExecutionContext::weight(std::bitset<1024> independent_set,
+                                                   const std::vector<double> &weights) {
+    double weight = 0.0;
+    for (std::size_t v = 0; v < graph.n_; ++v) {
+        if (!independent_set[v]) continue;
+        weight += weights[v];
+    }
+    return weight;
+}
