@@ -104,7 +104,7 @@ public:
 
     bool isVerticesIndependent(std::set<uint64_t> &independent_set) const;
 
-    std::set<std::set<uint64_t >> findWeightedIndependentSet(const std::vector<double> &weights) const;
+    std::set<std::pair<double, std::set<uint64_t >>> findWeightedIndependentSet(const std::vector<double> &weights) const;
 
     std::vector<uint64_t>
     orderVerticesSaturationSmallestFirstWeighted(std::vector<uint64_t> vertices, const std::vector<double> &wights) const;

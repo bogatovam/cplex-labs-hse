@@ -8,8 +8,8 @@
 #include <set>
 
 #include <include/cql_graph.h>
-#include "include/cplex_model.h"
-#include "shared.hpp"
+#include "shared.h"
+
 
 class CplexModel {
 private:
@@ -29,12 +29,12 @@ private:
 
     std::vector<IloRange> all_constraints;
 
-    IloRange buildConstraint(const std::set<uint64_t> &constraint, uint64_t lower_bound, uint64_t upper_bound);
+    IloRange buildConstraint(const std::set<uint64_t> &constraint, double lower_bound, double upper_bound);
 
 public:
     explicit CplexModel(std::size_t variables_num);
 
-    void addConstraints(const std::set<std::set<uint64_t>> &constraints, uint64_t lower_bound, uint64_t upper_bound);
+    void addConstraints(const std::set<std::set<uint64_t>> &constraints, double lower_bound, double upper_bound);
 
     void reduceModel(std::size_t limit = 1000);
 
@@ -45,6 +45,4 @@ public:
     void deleteConstraint(const IloRange &constrain);
 
     void addConstraint(const IloRange &constraint);
-
-    void addConstraint(const std::set<uint64_t> &constraint, uint64_t lower_bound, uint64_t upper_bound);
 };

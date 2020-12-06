@@ -4,25 +4,20 @@
 #include <cstdint>
 #include <vector>
 #include <bitset>
+#include <set>
 #include <chrono>
 #include <thread>
 #include <Windows.h>
+#include <atomic>
+#include <iostream>
 
+std::bitset<1024> asBitset(const std::set<uint64_t> &set);
 
-bool isNumberInteger(double number) {
-    double int_part;
-    return modf(number, &int_part) == 0.0;
-}
+std::set<uint64_t> asSet(const std::bitset<1024> &set, std::size_t n);
 
-bool isNumberCloseToInteger(double number, double eps = 0.00001) {
-    double up = std::ceil(number);
-    double down = std::floor(number);
+bool isNumberInteger(double number);
 
-    if (number + eps > up || number - eps < down) {
-        return true;
-    }
-    return false;
-}
+bool isNumberCloseToInteger(double number, double eps = 0.00001);
 
 template<class T>
 class Solution {
@@ -37,7 +32,7 @@ public:
     Solution &operator=(const Solution &other) {
         this->size = std::move(other.size);
         this->values = std::move(other.values);
-        this->other = std::move(other.integer_variables_num);
+        this->integer_variables_num = std::move(other.integer_variables_num);
         return *this;
     }
 
@@ -68,7 +63,7 @@ public:
     void printInfo() const {
         std::cout << "Solution:\t" << std::endl;
         for (const double &element: values) {
-            std::cout << element << ",\t" << std::endl;
+            std::cout << element << ",\t";
         }
         std::cout << std::endl;
         std::cout << "OBJ VALUE:\t" << size << std::endl;
@@ -104,11 +99,3 @@ public:
 private:
     std::thread timer;
 };
-
-std::bitset<1024> asBitset(const std::set<uint64_t> &set) {
-    std::bitset<1024> result;
-    for (const uint64_t &element: set) {
-        result.set(element, true);
-    }
-    return result;
-}

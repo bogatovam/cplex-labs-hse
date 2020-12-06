@@ -23,6 +23,13 @@ namespace max_clique_solver {
         steady_clock::duration average_float_cplex_time;
         steady_clock::duration float_cplex_time;
         steady_clock::time_point float_cplex_time_start;
+        steady_clock::duration average_cutting_time;
+        steady_clock::duration cutting_time;
+        steady_clock::time_point cutting_time_start;
+
+        steady_clock::duration average_cutting_iteration_time;
+        steady_clock::duration cutting_iteration_time;
+        steady_clock::time_point cutting_iteration_time_start;
 
         void onStartBranch() {
             branches_num++;
@@ -44,6 +51,23 @@ namespace max_clique_solver {
 
         void onDiscardedBranch() {
             discarded_branches_num++;
+        }
+
+        void onCuttingStart() {
+            cutting_time_start = steady_clock::now();
+        }
+
+        void onCuttingIterationStart() {
+            cutting_iteration_time_start = steady_clock::now();
+        }
+
+        void onCuttingIterationEnd() {
+            cutting_iteration_time += (steady_clock::now() - cutting_iteration_time_start);
+        }
+
+        void onCuttingEnd(uint64_t i) {
+            cutting_time += (steady_clock::now() - cutting_time_start);
+            average_cutting_iteration_time += cutting_iteration_time / i;
         }
     };
 
@@ -77,7 +101,7 @@ namespace max_clique_solver {
 
         static uint64_t branchingFindNearestToMiddle(const FloatSolution &solution);
 
-        void start(CplexModel &model);
+        void startBranchAndBound(CplexModel &model);
 
         void branchAndBound(CplexModel &current_model);
 
@@ -85,52 +109,23 @@ namespace max_clique_solver {
 
         void branchAndCut(CplexModel &current_model, const FloatSolution &current_solution);
 
-        std::set<std::set<uint64_t>> separation(const FloatSolution &solution, std::size_t max_iteration = 10);
+        std::set<std::set<uint64_t>> separation(const FloatSolution &solution);
 
         std::set<std::set<uint64_t>> checkSolution(const FloatSolution &solution);
 
-        std::bitset<1024> localSearch(const std::bitset<1024> &current_set,
-                                      const std::vector<double> &weights);
-
-        std::bitset<1024> perturb(const std::bitset<1024> &current_set, std::size_t k = 1);
-
-        std::vector<uint64_t> calculateTightness(std::bitset<1024> set, std::bitset<1024> possible_candidates) const;
-
-        std::map<uint64_t, std::bitset<1024>>
-        build12SwapCandidatesSet(std::bitset<1024> set, std::bitset<1024> possible_candidates,
-                                 const std::vector<uint64_t> &tightness) const;
-
-        std::pair<uint64_t, uint64_t> findFirst12Swap(double w_to_delete, std::bitset<1024> candidates,
-                                                      const std::vector<double> &weights) const;
-
-        void updateSetAndCandidates(std::bitset<1024> &current_set,
-                                    std::vector<uint64_t> tightness,
-                                    std::map<uint64_t, std::bitset<1024>> candidates,
-                                    uint64_t deleted,
-                                    std::pair<uint64_t, uint64_t> inserted,
-                                    std::vector<double> weights_diff,
-                                    const std::vector<double>& weights);
-
-        std::vector<double> calculateWeightsDiff(std::bitset<1024> set, const std::vector<double> &weights);
-
-        void updateSetAndCandidates(std::bitset<1024> &current_set,
-                                    std::vector<uint64_t> tightness,
-                                    std::bitset<1024> deleted, uint64_t inserted,
-                                    std::vector<double> weights_diff,
-                                    const std::vector<double> &weights);
-
-        double weight(std::bitset<1024> independent_set, const std::vector<double> &weights);
+        void startBranchAndCut(CplexModel &model);
     };
 
     CplexModel
-    init_cplex_model(const CqlGraph &graph, const std::map<NodesOrderingStrategy, std::vector<uint64_t>> &map);
+    init_cplex_model(const CqlGraph &graph, const std::map<NodesOrderingStrategy, std::vector<uint64_t>> &map,
+                     Strategy strategy);
 
     std::map<std::string, std::string> solve(const CqlGraph &graph, const Strategy &calc_strategy);
 
     std::bitset<1024> getBestMaxClique(const CqlGraph &graph,
                                        std::map<NodesOrderingStrategy, std::vector<uint64_t>> &coloring_by_strategy);
 
-    std::set<std::set<uint64_t>> buildAdjacencyConstraints(const CqlGraph &graph);
+    std::set<std::set<uint64_t>> buildAdjacencyConstraints(const CqlGraph &graph, const Strategy strategy);
 
     std::set<std::set<uint64_t>> buildColoringConstraints(const CqlGraph &graph,
                                                           const std::map<NodesOrderingStrategy, std::vector<uint64_t>> &coloring);

@@ -12,7 +12,6 @@
 #include <vector>
 #include <map>
 #include <iterator>
-#include <limits>
 
 #include <cassert>
 
@@ -595,10 +594,11 @@ bool CqlGraph::isVerticesIndependent(std::set<uint64_t> &independent_set) const 
     return true;
 }
 
-std::set<std::set<uint64_t >> CqlGraph::findWeightedIndependentSet(const std::vector<double> &weights) const {
+std::set<std::pair<double, std::set<uint64_t >>>
+CqlGraph::findWeightedIndependentSet(const std::vector<double> &weights) const {
     // get init independent sets
     auto coloring = colorWeightedGraph(weights);
-    std::set<std::set<uint64_t>> result;
+    std::set<std::pair<double, std::set<uint64_t >>> result;
     for (const auto &color_pair: coloring) {
         std::set<uint64_t> independent_set = color_pair.second;
         double weight = 0.0;
@@ -606,7 +606,12 @@ std::set<std::set<uint64_t >> CqlGraph::findWeightedIndependentSet(const std::ve
             weight += weights[v];
         }
         if (weight > 1.0) {
-            result.emplace(independent_set);
+            std::cout << "Found independent set. Weight:= " << weight << "; Elements:=(";
+            for (const auto &v: independent_set) {
+                std::cout << v << ", ";
+            }
+            std::cout << ");" << std::endl;
+            result.emplace(std::make_pair(weight, independent_set));
         }
     }
     return result;

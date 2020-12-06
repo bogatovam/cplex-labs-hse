@@ -27,7 +27,7 @@ CplexModel::CplexModel(std::size_t variables_num) {
     cplex.setOut(env.getNullStream());
 }
 
-IloRange CplexModel::buildConstraint(const std::set<uint64_t> &constraint, uint64_t lower_bound, uint64_t upper_bound) {
+IloRange CplexModel::buildConstraint(const std::set<uint64_t> &constraint, const double lower_bound, const double upper_bound) {
     /*  Let's clean name & expr first  */
     names_stream.str(std::string());
     expr.clear();
@@ -42,8 +42,8 @@ IloRange CplexModel::buildConstraint(const std::set<uint64_t> &constraint, uint6
 }
 
 void CplexModel::addConstraints(const std::set<std::set<uint64_t>> &constraints,
-                                uint64_t lower_bound,
-                                uint64_t upper_bound) {
+                                const double lower_bound,
+                                const double upper_bound) {
     IloRangeArray constraints_to_model = IloRangeArray(env, constraints.size());
 
     std::size_t constraint_num = 0;
@@ -54,12 +54,6 @@ void CplexModel::addConstraints(const std::set<std::set<uint64_t>> &constraints,
         constraints_to_model[constraint_num++] = buildConstraint(constraint, lower_bound, upper_bound);
     }
     cplex.getModel().add(constraints_to_model);
-}
-
-void CplexModel::addConstraint(const std::set<uint64_t> &constraint,
-                               uint64_t lower_bound,
-                               uint64_t upper_bound) {
-    addConstraint(buildConstraint(constraint, lower_bound, upper_bound));
 }
 
 IloRange CplexModel::addEqualityConstraintToVariable(uint64_t variable, double equals_to) {
