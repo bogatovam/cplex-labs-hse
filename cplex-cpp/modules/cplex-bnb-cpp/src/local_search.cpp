@@ -75,24 +75,25 @@ void WISLocalSearchExecutionContext::localSearch() {
     std::map<uint64_t, std::bitset<1024>> candidates_1_2_swap = build12SwapCandidatesSet(current_solution,
                                                                                          non_solution_vertices,
                                                                                          tightness);
-    for (std::pair<uint64_t, std::bitset<1024>> x_to_L_x: candidates_1_2_swap) {
-        if (x_to_L_x.second.count() < 2) {
+    for (auto it = candidates_1_2_swap.begin(); it != candidates_1_2_swap.end(); ++it) {
+        auto x_to_candidates = *it;
+        if (x_to_candidates.second.count() < 2) {
             continue;
         }
 
-        std::pair<uint64_t, uint64_t> swap = findFirst12Swap(weights[x_to_L_x.first], x_to_L_x.second);
+        std::pair<uint64_t, uint64_t> swap = findFirst12Swap(weights[x_to_candidates.first], x_to_candidates.second);
+
         if (swap.first == UINT64_MAX) {
             continue;
         }
-
-        updateSetAndCandidates(x_to_L_x.first, swap, candidates_1_2_swap);
+//        std::cout << "Found (1,2) swap: " << x_to_candidates.first << " -> (" << swap.first << "," << swap.second << ")"<< std::endl;
+        updateSetAndCandidates(x_to_candidates.first, swap, candidates_1_2_swap);
+        it = candidates_1_2_swap.begin();
     }
     auto set_function = [&](uint64_t i, uint64_t j) {
         return (weights_diff[i] > weights_diff[j]) || (weights_diff[i] == weights_diff[j] && i < j);
     };
 
-    tightness = calculateTightness(~current_solution);
-    weights_diff = calculateWeightsDiff();
     std::set<uint64_t, decltype(set_function)> w1_swap_candidates(set_function);
 
     for (std::size_t v = 0; v < graph.n_; ++v) {
@@ -217,6 +218,9 @@ void WISLocalSearchExecutionContext::updateSetAndCandidates(uint64_t deleted, st
     for (const auto &neighbor: graph.adjacency_lists_[deleted]) {
         weights_diff[neighbor] += weights[deleted];
     }
+
+    // из кандидатов нужно удалить соседей тех вершин, которые мы вставили
+    candidates_1_2_swap = build12SwapCandidatesSet(current_solution, ~current_solution, tightness);
 }
 
 void WISLocalSearchExecutionContext::updateSetAndCandidates(std::bitset<1024> deleted, uint64_t inserted,
@@ -240,11 +244,11 @@ void WISLocalSearchExecutionContext::updateSetAndCandidates(std::bitset<1024> de
     }
 }
 
-
 void WISLocalSearchExecutionContext::updateSet(std::bitset<1024> deleted, uint64_t inserted) {
     current_solution &= ~deleted;
     current_solution.set(inserted, true);
 
+    tightness[inserted] = 0;
     for (const auto &neighbor: graph.adjacency_lists_[inserted]) {
         weights_diff[neighbor] -= weights[inserted];
         tightness[neighbor] += 1;
@@ -252,6 +256,7 @@ void WISLocalSearchExecutionContext::updateSet(std::bitset<1024> deleted, uint64
 
     for (std::size_t v = 0; v < graph.n_; ++v) {
         if (!deleted[v]) continue;
+        tightness[v] = 1;
         for (const auto &neighbor: graph.adjacency_lists_[v]) {
             weights_diff[neighbor] += weights[v];
         }
@@ -279,7 +284,7 @@ std::pair<double, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bitse
     double best_weight = current_solution.weight();
 
     WISLocalSearchExecutionContext local_solution = current_solution;
-    for (std::size_t iteration = 0; iteration < 1000; ++iteration) {
+    for (std::size_t iteration = 0; iteration < 50; ++iteration) {
         local_solution.perturb();
         local_solution.localSearch();
         //  acceptance

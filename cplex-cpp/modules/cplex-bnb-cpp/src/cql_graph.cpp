@@ -606,11 +606,11 @@ CqlGraph::findWeightedIndependentSet(const std::vector<double> &weights) const {
             weight += weights[v];
         }
         if (weight > 1.0) {
-            std::cout << "Found independent set. Weight:= " << weight << "; Elements:=(";
-            for (const auto &v: independent_set) {
-                std::cout << v << ", ";
-            }
-            std::cout << ");" << std::endl;
+//            std::cout << "Found independent set. Weight:= " << weight << "; Elements:=(";
+//            for (const auto &v: independent_set) {
+//                std::cout << v << ", ";
+//            }
+//            std::cout << ");" << std::endl;
             result.emplace(std::make_pair(weight, independent_set));
         }
     }

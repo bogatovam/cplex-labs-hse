@@ -27,14 +27,15 @@ private:
 
     IloCplex cplex;
 
-    std::vector<IloRange> all_constraints;
+    std::map<std::string, IloRange> all_constraints;
 
     IloRange buildConstraint(const std::set<uint64_t> &constraint, double lower_bound, double upper_bound);
 
 public:
     explicit CplexModel(std::size_t variables_num);
 
-    void addConstraints(const std::set<std::set<uint64_t>> &constraints, double lower_bound, double upper_bound);
+    IloRangeArray
+    addConstraints(const std::set<std::set<uint64_t>> &constraints, const double lower_bound, const double upper_bound);
 
     void reduceModel(std::size_t limit = 1000);
 
@@ -45,4 +46,6 @@ public:
     void deleteConstraint(const IloRange &constrain);
 
     void addConstraint(const IloRange &constraint);
+
+    void deleteConstraints(const IloRangeArray &constraints);
 };

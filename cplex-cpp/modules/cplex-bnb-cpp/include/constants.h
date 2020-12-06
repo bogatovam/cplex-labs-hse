@@ -3,10 +3,10 @@
 #include <iostream>
 
 static const std::pair<std::string, uint64_t> GRAPHS_NAMES[] = {
-        {"hamming6-2.clq",     32},
-        {"MANN_a9.clq",        16},
-        {"c-fat200-1.clq",     12},
-        {"c-fat200-2.clq",     24},
+//        {"hamming6-2.clq",     32},
+//        {"MANN_a9.clq",        16},
+//        {"c-fat200-1.clq",     12},
+//        {"c-fat200-2.clq",     24},
         {"gen200_p0.9_55.clq", 55},
         {"hamming6-4.clq",     4},
         {"san200_0.7_1.clq",   30},

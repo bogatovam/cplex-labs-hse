@@ -451,10 +451,9 @@ void max_clique_solver::ExecutionContext::branchAndBound(CplexModel &current_mod
 
 void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model,
                                                        const FloatSolution &current_solution) {
-    if (timer.is_time_over) {
-        return;
-    }
-    current_solution.printInfo();
+//    if (timer.is_time_over) {
+//        return;
+//    }
     metrics.onStartBranch();
 
     double current_solution_size = roundWithEpsilon(current_solution.size);
@@ -464,23 +463,20 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
         return;
     }
 
-    double delta = 1e2;
+    double delta = 0.01;
     double max_upper_bound_delta = 0;
     double previous_upper_bound = current_solution_size;
-    uint64_t iteration_period = 10;
 
     uint64_t iteration_count = 0;
 
     FloatSolution enhanced_solution = current_solution;
     metrics.onCuttingStart();
-    std::cout << "Branch: (" << current_solution.size << " , " << current_solution.integer_variables_num << ")";
     while (true) {
         metrics.onCuttingIterationStart();
-        std::cout << "\t Iteration # " << iteration_count << " , " << std::endl;
+//        std::cout << "\t Iteration # " << iteration_count << " , " << std::endl;
         iteration_count++;
 
-        if (this->optimal_solution.size > roundWithEpsilon(enhanced_solution.size)) {
-            std::cout << "Break from loop: violated constraints not found" << std::endl;
+        if (this->optimal_solution.size >= roundWithEpsilon(enhanced_solution.size)) {
             metrics.onDiscardedBranch();
             metrics.onCuttingIterationEnd();
             metrics.onCuttingEnd(iteration_count);
@@ -491,35 +487,22 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
         std::set<std::set<uint64_t>> violated_constraint = separation(current_solution);
 
         if (violated_constraint.empty()) {
-            std::cout << "Break from loop: violated constraints not found" << std::endl;
             break;
         }
 
         current_model.addConstraints(violated_constraint, lower_bound, upper_bound);
         enhanced_solution = current_model.getFloatSolution();
 
-//        if (enhanced_solution.integer_variables_num == enhanced_solution.values.size()) {
-//            break;
-//        }
-
-        max_upper_bound_delta = max(std::fabs(enhanced_solution.size - previous_upper_bound), max_upper_bound_delta);
+        max_upper_bound_delta = std::fabs(enhanced_solution.size - previous_upper_bound);
         previous_upper_bound = enhanced_solution.size;
         current_model.reduceModel();
 
-        if (iteration_count % iteration_period == 0) {
-            if (max_upper_bound_delta < delta) {
-                std::cout << "Break from loop: delta is too small. delta:= " << max_upper_bound_delta << std::endl;
-                break;
-            }
-            std::cout << "Continue cutting. delta:= " << max_upper_bound_delta << std::endl;
-            max_upper_bound_delta = 0.0;
+        if (max_upper_bound_delta < delta) {
+            break;
         }
         metrics.onCuttingIterationEnd();
     }
     metrics.onCuttingEnd(iteration_count);
-    std::cout << "Branch: (" << current_solution.size << " , " << current_solution.integer_variables_num << ")";
-    std::cout << "\t Cutting finished. Enhanced solution:= " << std::endl;
-    enhanced_solution.printInfo();
 
     if (enhanced_solution.integer_variables_num == enhanced_solution.values.size()) {
         std::set<std::set<uint64_t>> violatedNonEdgeConstraints = checkSolution(enhanced_solution);
@@ -530,15 +513,13 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
             metrics.onFinishBranch();
             return;
         } else {
-            std::cout << "Found violated integer solution " << "(" << enhanced_solution.size << " , "
-                      << enhanced_solution.integer_variables_num << ")\n";
-            current_model.addConstraints(violatedNonEdgeConstraints, lower_bound, upper_bound);
+            auto constraints = current_model.addConstraints(violatedNonEdgeConstraints, lower_bound, upper_bound);
             branchAndCut(current_model, current_model.getFloatSolution());
+            current_model.deleteConstraints(constraints);
         }
     }
 
     uint64_t branching_var = branchingFindNearestToInteger(enhanced_solution);
-    std::cout << "Branching variable: " << branching_var << std::endl;
 
     IloRange down_constraint = current_model.addEqualityConstraintToVariable(branching_var, lower_bound);
     metrics.onCplexFloatSolveStart();
@@ -558,21 +539,11 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
         (down_solution.integer_variables_num == up_solution.integer_variables_num &&
          down_solution.size < up_solution.size)) {
         std::swap(branches[0], branches[1]);
-        std::cout << "Order: UP, DOWN: \t("
-                  << up_solution.size << "," << up_solution.integer_variables_num << "),\t("
-                  << down_solution.size << "," << down_solution.integer_variables_num << ")" << std::endl;
-    } else {
-        std::cout << "Order: DOWN, UP \t("
-                  << down_solution.size << "," << down_solution.integer_variables_num << "),\t("
-                  << up_solution.size << "," << up_solution.integer_variables_num << ")" << std::endl;
     }
 
     for (const auto &branch: branches) {
-        std::cout << "BRANCHING: \t("
-                  << branch.second.size << "," << branch.second.integer_variables_num << ")" << std::endl;
-
         current_model.addConstraint(branch.first);
-        branchAndBound(current_model, branch.second);
+        branchAndCut(current_model, branch.second);
         current_model.deleteConstraint(branch.first);
     }
     metrics.onFinishBranch();
@@ -587,28 +558,29 @@ std::set<std::set<uint64_t>> max_clique_solver::ExecutionContext::separation(con
         std::pair<double, std::bitset<1024>> improved = LocalSearchLauncher::localSearch(asBitset(init.second), graph,
                                                                                          solution.values);
         if (improved.first > init.first) {
-            std::cout << "Independent set was improved. Weight:= " << init.first << "->" << improved.first <<
-                      ");\t" << "; From:=(";
-            for (const auto &v: init.second) {
-                std::cout << v << ", ";
-            }
-            std::cout << "); \t To:=(";
-            auto tmp = asSet(improved.second, graph.n_);
-            for (const auto &v: tmp) {
-                std::cout << v << ", ";
-            }
-            std::cout << ");" << std::endl;
 
-#ifdef CHECK_SOLUTION
-            if (!graph.isVerticesIndependent(tmp)) {
-                std::cout << "set is not independent" << std::endl;
-                throw std::runtime_error("set is not independent");
-            }
-#endif
+//            std::cout << "Independent set was improved. Weight:= " << init.first << "->" << improved.first <<
+//                      ");\t" << "; From:=(";
+//            for (const auto &v: init.second) {
+//                std::cout << v << ", ";
+//            }
+//            std::cout << "); \t To:=(";
+//            for (const auto &v: tmp) {
+//                std::cout << v << ", ";
+//            }
+//            std::cout << ");" << std::endl;
+
+//#ifdef CHECK_SOLUTION
+//            auto tmp = asSet(improved.second, graph.n_);
+//            if (!graph.isVerticesIndependent(tmp)) {
+//                std::cout << "set is not independent" << std::endl;
+//                throw std::runtime_error("set is not independent");
+//            }
+//#endif
+            result.insert(asSet(improved.second, graph.n_));
         } else {
-
+            result.insert(init.second);
         }
-        result.insert(asSet(improved.second, graph.n_));
     }
     return result;
 }
@@ -617,7 +589,6 @@ std::set<std::set<uint64_t>> max_clique_solver::ExecutionContext::checkSolution(
         const FloatSolution &solution) {
     std::cout << "CHECK INTEGER SOLUTION:\t(" << solution.size << ", " << solution.integer_variables_num << ")"
               << std::endl;
-    solution.printInfo();
 
     std::set<uint64_t> clique = solution.extractResult();
 

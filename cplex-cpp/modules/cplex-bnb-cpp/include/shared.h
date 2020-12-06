@@ -59,16 +59,6 @@ public:
         }
         return clique;
     }
-
-    void printInfo() const {
-        std::cout << "Solution:\t" << std::endl;
-        for (const double &element: values) {
-            std::cout << element << ",\t";
-        }
-        std::cout << std::endl;
-        std::cout << "OBJ VALUE:\t" << size << std::endl;
-        std::cout << "INTEGERS COUNT:\t" << integer_variables_num << std::endl;
-    }
 };
 
 typedef Solution<std::vector<double>> FloatSolution;

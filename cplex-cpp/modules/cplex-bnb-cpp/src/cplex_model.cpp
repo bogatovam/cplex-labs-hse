@@ -27,33 +27,33 @@ CplexModel::CplexModel(std::size_t variables_num) {
     cplex.setOut(env.getNullStream());
 }
 
-IloRange CplexModel::buildConstraint(const std::set<uint64_t> &constraint, const double lower_bound, const double upper_bound) {
+IloRange
+CplexModel::buildConstraint(const std::set<uint64_t> &constraint, const double lower_bound, const double upper_bound) {
     /*  Let's clean name & expr first  */
     names_stream.str(std::string());
     expr.clear();
 
     for (const auto &constraint_var: constraint) {
-        names_stream << constraint_var << " + ";
+        names_stream << constraint_var << "_";
         expr += x[constraint_var];
     }
 
-    names_stream << " <= 1";
     return {env, IloNum(lower_bound), expr, IloNum(upper_bound), names_stream.str().c_str()};
 }
 
-void CplexModel::addConstraints(const std::set<std::set<uint64_t>> &constraints,
-                                const double lower_bound,
-                                const double upper_bound) {
+IloRangeArray CplexModel::addConstraints(const std::set<std::set<uint64_t>> &constraints,
+                                         const double lower_bound,
+                                         const double upper_bound) {
     IloRangeArray constraints_to_model = IloRangeArray(env, constraints.size());
 
     std::size_t constraint_num = 0;
     for (const auto &constraint: constraints) {
         IloRange current_constraint = buildConstraint(constraint, lower_bound, upper_bound);
-
-        all_constraints.push_back(current_constraint);
-        constraints_to_model[constraint_num++] = buildConstraint(constraint, lower_bound, upper_bound);
+        all_constraints[current_constraint.getName()] = current_constraint;
+        constraints_to_model[constraint_num++] = current_constraint;
     }
     cplex.getModel().add(constraints_to_model);
+    return constraints_to_model;
 }
 
 IloRange CplexModel::addEqualityConstraintToVariable(uint64_t variable, double equals_to) {
@@ -68,13 +68,17 @@ IloRange CplexModel::addEqualityConstraintToVariable(uint64_t variable, double e
 
 FloatSolution CplexModel::getFloatSolution() {
     bool isSolved = cplex.solve();
-    if (!isSolved) {
-        cplex.exportModel("not_solved_model.lp");
-        throw std::runtime_error("It is impossible to solve CPLEX model. See 'not_solved_model.lp'");
-    }
-    double result = cplex.getObjValue();
     uint64_t size = x.getSize();
+    double result = 0;
     std::vector<double> result_vector(size, 0.0);
+    if (!isSolved) {
+        return {result, result_vector};
+//        cplex.exportModel("not_solved_model.lp");
+//        std::cout << "It is impossible to solve CPLEX model. See 'not_solved_model.lp'" << std::endl;
+//        throw std::runtime_error("It is impossible to solve CPLEX model. See 'not_solved_model.lp'");
+    }
+    result = cplex.getObjValue();
+
     for (uint64_t i = 0; i < size; ++i) {
         result_vector[i] = cplex.getValue(x[i]);
     }
@@ -82,27 +86,43 @@ FloatSolution CplexModel::getFloatSolution() {
 }
 
 void CplexModel::deleteConstraint(const IloRange &constraint) {
+    all_constraints.erase(constraint.getName());
     cplex.getModel().remove(constraint);
 }
 
 void CplexModel::addConstraint(const IloRange &constraint) {
-    all_constraints.push_back(constraint);
     cplex.getModel().add(constraint);
+    all_constraints[constraint.getName()] = constraint;
 }
 
 void CplexModel::reduceModel(std::size_t limit) {
-    if (all_constraints.size() > limit) {
-        all_constraints.erase(std::remove_if(
-                all_constraints.begin(), all_constraints.end(),
-                [&](const IloRange &constraint) {
-                    double slack = cplex.getSlack(constraint);
-                    if (slack > 0.0) {
-                        std::cout << "Constraint " << constraint.getName() << " was deleted, slack:=" << slack
-                                  << std::endl;
-                        cplex.getModel().remove(constraint);
-                    }
-                    return slack > 0.0;
-                }), all_constraints.end());
+    if (all_constraints.size() > 100500) {
+        std::vector<IloRange> to_delete;
+        for (auto it = all_constraints.begin(); it != all_constraints.end();) {
+            auto constraint = *it;
+            double slack = cplex.getSlack(constraint.second);
+            if (slack > 0.0) {
+                to_delete.push_back(constraint.second);
+//                std::cout << "Constraint " << constraint.first << " will be deleted; slack:=" << slack << std::endl;
+                it = all_constraints.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        std::cout << to_delete.size() << " constraints will be deleted"<< std::endl;
+
+        IloRangeArray constraints_to_model = IloRangeArray(env, to_delete.size());
+        uint64_t i = 0;
+        for (const auto &c: to_delete) {
+            constraints_to_model[i++] = c;
+        }
+        cplex.getModel().remove(constraints_to_model);
+    }
+}
+
+void CplexModel::deleteConstraints(const IloRangeArray &constraints) {
+    for (int i = 0; i < constraints.getSize(); ++i) {
+        deleteConstraint(constraints[i]);
     }
 }
 
