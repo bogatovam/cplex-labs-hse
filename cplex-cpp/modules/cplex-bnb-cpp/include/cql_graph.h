@@ -31,7 +31,6 @@ public:
     const std::size_t m_;
 
     const std::vector<std::set<uint64_t>> adjacency_lists_;
-    // just big number
     const std::vector<std::bitset<1024>> confusion_matrix_bit_set_;
 
     CqlGraph(
@@ -78,25 +77,10 @@ public:
         return max_degree;
     }
 
-    std::bitset<1024> localSearch(std::bitset<1024> &clique) const;
-
-    std::map<uint64_t, std::bitset<1024>>
-    buildCandidatesSet(std::bitset<1024> clique, std::bitset<1024> possible_candidates,
-                       const std::vector<uint64_t> &tightness) const;
-
     CqlGraph buildSubgraph(std::bitset<1024> set) const;
 
-    std::pair<uint64_t, uint64_t> findFirstSwap(const CqlGraph &graph) const;
-
-    void updateCliqueAndCandidates(std::bitset<1024> &clique,
-                                   std::vector<uint64_t> &tightness,
-                                   std::map<uint64_t, std::bitset<1024>> &candidates,
-                                   uint64_t deleted,
-                                   std::pair<uint64_t, uint64_t> &inserted) const;
-
-    std::vector<uint64_t> calculateTightness(std::bitset<1024> clique, std::bitset<1024> possible_candidates) const;
-
-    std::bitset<1024> getHeuristicMaxCliqueRecursive(const std::vector<uint64_t> &coloring, NodesOrderingStrategy cs) const;
+    std::bitset<1024> getHeuristicMaxCliqueRecursive(
+            const std::vector<uint64_t> &coloring, NodesOrderingStrategy cs) const;
 
     bool isClique(const std::bitset<1024> &clique) const;
 
@@ -104,10 +88,12 @@ public:
 
     bool isVerticesIndependent(std::set<uint64_t> &independent_set) const;
 
-    std::set<std::pair<double, std::set<uint64_t >>> findWeightedIndependentSet(const std::vector<double> &weights) const;
+    std::set<std::pair<double, std::set<uint64_t >>>
+    findWeightedIndependentSet(const std::vector<double> &weights) const;
 
     std::vector<uint64_t>
-    orderVerticesSaturationSmallestFirstWeighted(std::vector<uint64_t> vertices, const std::vector<double> &wights) const;
+    orderVerticesSaturationSmallestFirstWeighted(std::vector<uint64_t> vertices,
+                                                 const std::vector<double> &wights) const;
 
     std::map<uint64_t, std::set<uint64_t>> colorWeightedGraph(const std::vector<double> &wights) const;
 };

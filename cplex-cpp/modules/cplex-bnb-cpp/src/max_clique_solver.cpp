@@ -4,8 +4,6 @@
 #include <include/local_search.h>
 #include "include/max_clique_solver.h"
 
-#define CHECK_SOLUTION
-
 std::set<std::set<uint64_t>>
 max_clique_solver::buildAdjacencyConstraints(const CqlGraph &graph, const Strategy strategy) {
     std::set<std::set<uint64_t>> result;
@@ -201,34 +199,34 @@ std::map<std::string, std::string> max_clique_solver::solve(const CqlGraph &grap
     steady_clock::time_point begin = steady_clock::now();
 
     std::bitset<1024> best_clique = getBestMaxClique(graph, coloring_by_strategy);
-    CplexModel cplex_solver = init_cplex_model(graph, coloring_by_strategy, calc_strategy);
+//    CplexModel cplex_solver = init_cplex_model(graph, coloring_by_strategy, calc_strategy);
 
     auto heuristic_time = steady_clock::now() - begin;
 
-    ExecutionContext bnc_context(best_clique.count(), hours(1), graph);
-    bnc_context.startBranchAndCut(cplex_solver);
+//    ExecutionContext bnc_context(best_clique.count(), hours(1), graph);
+//    bnc_context.startBranchAndCut(cplex_solver);
 
     log["heuristic_time (sec)"] = std::to_string(duration_cast<seconds>(heuristic_time).count());
     log["heuristic_time (ms)"] = std::to_string(duration_cast<milliseconds>(heuristic_time).count());
     log["heuristic_result"] = std::to_string(best_clique.count());
-    log["cplex time (sec)"] = std::to_string(duration_cast<seconds>(bnc_context.metrics.total_execution_time).count());
-    log["cplex time (ms)"] = std::to_string(
-            duration_cast<milliseconds>(bnc_context.metrics.total_execution_time).count());
-    log["result"] = std::to_string(bnc_context.optimal_solution.size);
-    log["max_depth"] = std::to_string(bnc_context.metrics.max_depth);
-    log["branches_num"] = std::to_string(bnc_context.metrics.branches_num);
-    log["discarded_branches_num"] = std::to_string(bnc_context.metrics.discarded_branches_num);
-    log["average_float_cplex_time"] =
-            std::to_string(duration_cast<milliseconds>(bnc_context.metrics.average_float_cplex_time).count());
-    log["float_cplex_time"] =
-            std::to_string(duration_cast<milliseconds>(bnc_context.metrics.float_cplex_time).count());
-    log["time (sec)"] = std::to_string(
-            duration_cast<seconds>(bnc_context.metrics.total_execution_time + heuristic_time).count());
-    log["timeout"] = std::to_string(bnc_context.timer.is_time_over);
-    log["average_cutting_time"] =
-            std::to_string(duration_cast<seconds>(bnc_context.metrics.average_cutting_time).count());
-    log["average_cutting_iteration_time"] =
-            std::to_string(duration_cast<seconds>(bnc_context.metrics.average_cutting_iteration_time).count());
+//    log["cplex time (sec)"] = std::to_string(duration_cast<seconds>(bnc_context.metrics.total_execution_time).count());
+//    log["cplex time (ms)"] = std::to_string(
+//            duration_cast<milliseconds>(bnc_context.metrics.total_execution_time).count());
+//    log["result"] = std::to_string(bnc_context.optimal_solution.size);
+//    log["max_depth"] = std::to_string(bnc_context.metrics.max_depth);
+//    log["branches_num"] = std::to_string(bnc_context.metrics.branches_num);
+//    log["discarded_branches_num"] = std::to_string(bnc_context.metrics.discarded_branches_num);
+//    log["average_float_cplex_time"] =
+//            std::to_string(duration_cast<milliseconds>(bnc_context.metrics.average_float_cplex_time).count());
+//    log["float_cplex_time"] =
+//            std::to_string(duration_cast<milliseconds>(bnc_context.metrics.float_cplex_time).count());
+//    log["time (sec)"] = std::to_string(
+//            duration_cast<seconds>(bnc_context.metrics.total_execution_time + heuristic_time).count());
+//    log["timeout"] = std::to_string(bnc_context.timer.is_time_over);
+//    log["average_cutting_time"] =
+//            std::to_string(duration_cast<seconds>(bnc_context.metrics.average_cutting_time).count());
+//    log["average_cutting_iteration_time"] =
+//            std::to_string(duration_cast<seconds>(bnc_context.metrics.average_cutting_iteration_time).count());
     return log;
 }
 
@@ -251,8 +249,8 @@ std::bitset<1024> max_clique_solver::getBestMaxClique(const CqlGraph &graph,
             best_clique = current_clique;
         }
     }
-    best_clique = graph.localSearch(best_clique);
-    return best_clique;
+    std::pair<uint64_t, std::bitset<1024>> improved_clique = LocalSearchLauncher::localSearch(best_clique, graph);
+    return improved_clique.second;
 }
 
 double max_clique_solver::ExecutionContext::roundWithEpsilon(double objective_function_value,
@@ -451,9 +449,9 @@ void max_clique_solver::ExecutionContext::branchAndBound(CplexModel &current_mod
 
 void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model,
                                                        const FloatSolution &current_solution) {
-//    if (timer.is_time_over) {
-//        return;
-//    }
+    if (timer.is_time_over) {
+        return;
+    }
     metrics.onStartBranch();
 
     double current_solution_size = roundWithEpsilon(current_solution.size);
@@ -473,7 +471,6 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
     metrics.onCuttingStart();
     while (true) {
         metrics.onCuttingIterationStart();
-//        std::cout << "\t Iteration # " << iteration_count << " , " << std::endl;
         iteration_count++;
 
         if (this->optimal_solution.size >= roundWithEpsilon(enhanced_solution.size)) {
@@ -558,25 +555,6 @@ std::set<std::set<uint64_t>> max_clique_solver::ExecutionContext::separation(con
         std::pair<double, std::bitset<1024>> improved = LocalSearchLauncher::localSearch(asBitset(init.second), graph,
                                                                                          solution.values);
         if (improved.first > init.first) {
-
-//            std::cout << "Independent set was improved. Weight:= " << init.first << "->" << improved.first <<
-//                      ");\t" << "; From:=(";
-//            for (const auto &v: init.second) {
-//                std::cout << v << ", ";
-//            }
-//            std::cout << "); \t To:=(";
-//            for (const auto &v: tmp) {
-//                std::cout << v << ", ";
-//            }
-//            std::cout << ");" << std::endl;
-
-//#ifdef CHECK_SOLUTION
-//            auto tmp = asSet(improved.second, graph.n_);
-//            if (!graph.isVerticesIndependent(tmp)) {
-//                std::cout << "set is not independent" << std::endl;
-//                throw std::runtime_error("set is not independent");
-//            }
-//#endif
             result.insert(asSet(improved.second, graph.n_));
         } else {
             result.insert(init.second);

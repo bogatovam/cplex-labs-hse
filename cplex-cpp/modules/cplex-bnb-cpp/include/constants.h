@@ -34,3 +34,4 @@ static const std::pair<std::string, uint64_t> GRAPHS_NAMES[] = {
 static const std::pair<std::string, uint64_t> TEST_GRAPHS[] = {
         {"test_7_4.clq", 6}
 };
+
