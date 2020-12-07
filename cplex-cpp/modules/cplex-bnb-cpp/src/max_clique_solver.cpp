@@ -456,7 +456,7 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
 
     double current_solution_size = roundWithEpsilon(current_solution.size);
 
-    if (this->optimal_solution.size > current_solution_size) {
+    if (this->optimal_solution.size >= current_solution_size) {
         metrics.onDiscardedBranch();
         return;
     }
@@ -512,8 +512,8 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
             return;
         } else {
             auto constraints = current_model.addConstraints(violatedNonEdgeConstraints, lower_bound, upper_bound);
-            branchAndCut(current_model, current_model.getFloatSolution());
-            current_model.deleteConstraints(constraints);
+            auto solution = current_model.getFloatSolution();
+            branchAndCut(current_model, solution);
         }
     }
 

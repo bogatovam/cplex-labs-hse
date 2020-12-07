@@ -37,7 +37,7 @@ public:
     IloRangeArray
     addConstraints(const std::set<std::set<uint64_t>> &constraints, const double lower_bound, const double upper_bound);
 
-    void reduceModel(std::size_t limit = 5000);
+    void reduceModel(std::size_t limit = 1000);
 
     IloRange addEqualityConstraintToVariable(uint64_t variable, double equals_to);
 

@@ -108,7 +108,8 @@ void CplexModel::reduceModel(std::size_t limit) {
                 ++it;
             }
         }
-        std::cout << to_delete.size() << " constraints will be deleted"<< std::endl;
+        std::cout << to_delete.size() << " constraints will be deleted. Remaining constraints count:="
+                  << all_constraints.size() << std::endl;
 
         IloRangeArray constraints_to_model = IloRangeArray(env, to_delete.size());
         uint64_t i = 0;

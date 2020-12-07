@@ -296,6 +296,7 @@ std::pair<double, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bitse
 
     std::bitset<1024> best_solution = current_solution.current_solution;
     double best_weight = current_solution.weight();
+    uint64_t non_changed_iteration = 0;
 
     WISLocalSearchExecutionContext local_solution = current_solution;
     for (std::size_t iteration = 0; iteration < 100; ++iteration) {
@@ -304,13 +305,14 @@ std::pair<double, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bitse
         //  acceptance
         double updated = local_solution.weight();
         double current = current_solution.weight();
-        if (updated > current) {
+        if (updated > current || non_changed_iteration > current_solution.current_solution_size) {
             current_solution = local_solution;
             if (updated > best_weight ||
                 (updated == best_weight && best_solution.count() < local_solution.current_solution_size)) {
                 best_solution = local_solution.current_solution;
                 best_weight = updated;
             }
+            non_changed_iteration = 0;
         } else {
             if (updated == current &&
                 local_solution.current_solution_size > current_solution.current_solution_size) {
@@ -321,6 +323,7 @@ std::pair<double, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bitse
                     best_solution = local_solution.current_solution;
                     best_weight = updated;
                 }
+                non_changed_iteration = 0;
             }
         }
     }
