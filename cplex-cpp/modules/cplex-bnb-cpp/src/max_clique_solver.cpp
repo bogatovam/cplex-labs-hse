@@ -249,7 +249,7 @@ std::bitset<1024> max_clique_solver::getBestMaxClique(const CqlGraph &graph,
             best_clique = current_clique;
         }
     }
-    std::pair<uint64_t, std::bitset<1024>> improved_clique = LocalSearchLauncher::localSearch(best_clique, graph);
+    std::pair<uint64_t, std::bitset<1024>> improved_clique = LocalSearchLauncher::localSearch(best_clique, graph, 100);
     return improved_clique.second;
 }
 
