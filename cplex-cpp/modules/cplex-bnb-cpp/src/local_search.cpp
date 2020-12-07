@@ -4,6 +4,7 @@
 #include <include/shared.h>
 #include "include/local_search.h"
 #include <random>
+#define CHECK_SOLUTION
 
 LocalSearchExecutionContext::LocalSearchExecutionContext(const std::bitset<1024> &current_solution,
                                                          const CqlGraph &graph,
@@ -138,7 +139,7 @@ void WISLocalSearchExecutionContext::localSearch() {
         if ((deleted_neighbors & graph.confusion_matrix_bit_set_[v]).count() != 0) {
             continue;
         }
-        updateSetAndCandidates(graph.confusion_matrix_bit_set_[v], v, candidates_1_2_swap);
+        updateSet(graph.confusion_matrix_bit_set_[v], v);
         deleted_neighbors |= graph.confusion_matrix_bit_set_[v];
     }
 }
@@ -147,15 +148,14 @@ void WISLocalSearchExecutionContext::perturb(std::size_t k) {
     std::random_device rd;
     std::mt19937 g(rd());
 
-
     for (std::size_t i = 0; i < k; ++i) {
-        std::uniform_int_distribution<> distrib(0, (int) (graph.n_ - current_solution.count() - 1));
+        std::uniform_int_distribution<> distrib(0, (int) (graph.n_ - current_solution_size - 1));
         std::size_t vertex_to_insert = distrib(g);
         std::size_t index_vertex_to_insert = 0;
         std::size_t skipped = 0;
 
-        for (std::size_t v = 0; v < graph.n_; ++v, ++index_vertex_to_insert) {
-            if (current_solution[v]) continue;
+        for (; index_vertex_to_insert < graph.n_; ++index_vertex_to_insert) {
+            if (current_solution[index_vertex_to_insert]) continue;
 
             if (skipped == vertex_to_insert) {
                 break;
@@ -231,16 +231,22 @@ void WISLocalSearchExecutionContext::updateSetAndCandidates(uint64_t deleted, st
     current_solution.set(inserted.first, true);
     current_solution.set(inserted.second, true);
 
+    current_solution_size = current_solution.count();
+
+    for (const auto &neighbor: graph.adjacency_lists_[deleted]) {
+        tightness[neighbor] -= 1 * (!current_solution[neighbor]);
+    }
+
     for (const auto &neighbor: graph.adjacency_lists_[inserted.first]) {
 //       weights_diff - разница между весом вершины и суммой весов соседей в вершине
 //      Вставили вершину в решение -> значит нужно ее вес учесть в weights_diff для всех ее соседей
         weights_diff[neighbor] -= weights[inserted.first];
 //      Вставили вершину в решение -> нужно увеличить на единицу тау у ее соседей
-        tightness[neighbor] += 1;
+        tightness[neighbor] += 1 * (neighbor != deleted);
     }
     for (const auto &neighbor: graph.adjacency_lists_[inserted.second]) {
         weights_diff[neighbor] -= weights[inserted.second];
-        tightness[neighbor] += 1;
+        tightness[neighbor] += 1 * (neighbor != deleted);
     }
 //    Так как вершина удалена из решения -> она не должна влиять на weights_diff своих соседей
     for (const auto &neighbor: graph.adjacency_lists_[deleted]) {
@@ -248,43 +254,26 @@ void WISLocalSearchExecutionContext::updateSetAndCandidates(uint64_t deleted, st
     }
 }
 
-void WISLocalSearchExecutionContext::updateSetAndCandidates(std::bitset<1024> deleted, uint64_t inserted,
-                                                            std::map<uint64_t, std::bitset<1024>> &candidates_1_2_swap) {
-    current_solution &= ~deleted;
-    current_solution.set(inserted, true);
-
-    tightness[inserted] = 0;
-    for (const auto &neighbor: graph.adjacency_lists_[inserted]) {
-        weights_diff[neighbor] -= weights[inserted];
-        tightness[neighbor] += 1;
-    }
-
-    for (std::size_t v = 0; v < graph.n_; ++v) {
-        if (!deleted[v]) continue;
-//      Происходит вставка одной вершины и удаление всех ее соседей -> у удаленных ершин только один сосед в решении
-        tightness[v] = 1;
-        for (const auto &neighbor: graph.adjacency_lists_[v]) {
-            weights_diff[neighbor] += weights[v];
-        }
-    }
-}
-
 void WISLocalSearchExecutionContext::updateSet(std::bitset<1024> deleted, uint64_t inserted) {
+    auto deleted_in_solution = current_solution & deleted;
     current_solution &= ~deleted;
     current_solution.set(inserted, true);
-
-    tightness[inserted] = 0;
-    for (const auto &neighbor: graph.adjacency_lists_[inserted]) {
-        weights_diff[neighbor] -= weights[inserted];
-        tightness[neighbor] += 1;
-    }
+    current_solution_size = current_solution.count();
 
     for (std::size_t v = 0; v < graph.n_; ++v) {
-        if (!deleted[v]) continue;
-        tightness[v] = 1;
+        if (!deleted_in_solution[v] || v == inserted) continue;
         for (const auto &neighbor: graph.adjacency_lists_[v]) {
-            weights_diff[neighbor] += weights[v];
+            tightness[neighbor] -= 1 * (!deleted_in_solution[neighbor]);
+            weights_diff[neighbor] += weights[v] * (!deleted_in_solution[neighbor]);
         }
+        tightness[v] = 1;
+    }
+
+    tightness[inserted] = 0;
+
+    for (const auto &neighbor: graph.adjacency_lists_[inserted]) {
+        weights_diff[neighbor] -= weights[inserted];
+        tightness[neighbor] += 1 * (!deleted_in_solution[neighbor]);
     }
 }
 
@@ -318,16 +307,16 @@ std::pair<double, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bitse
         if (updated > current) {
             current_solution = local_solution;
             if (updated > best_weight ||
-                (updated == best_weight && best_solution.count() < local_solution.current_solution.count())) {
+                (updated == best_weight && best_solution.count() < local_solution.current_solution_size)) {
                 best_solution = local_solution.current_solution;
                 best_weight = updated;
             }
         } else {
             if (updated == current &&
-                local_solution.current_solution.count() > current_solution.current_solution.count()) {
+                local_solution.current_solution_size > current_solution.current_solution_size) {
                 current_solution = local_solution;
                 if (updated > best_weight ||
-                    (updated == best_weight && best_solution.count() < local_solution.current_solution.count())) {
+                    (updated == best_weight && best_solution.count() < local_solution.current_solution_size)) {
 
                     best_solution = local_solution.current_solution;
                     best_weight = updated;
@@ -345,15 +334,15 @@ std::pair<uint64_t, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bit
     current_solution.localSearch();
 
     std::bitset<1024> best_solution = current_solution.current_solution;
-    uint64_t best_size = current_solution.current_solution.count();
+    uint64_t best_size = current_solution.current_solution_size;
     uint64_t non_changed_iteration = 0;
     CliqueLocalSearchExecutionContext local_solution = current_solution;
-    for (std::size_t iteration = 0; iteration < 1000; ++iteration) {
+    for (std::size_t iteration = 0; iteration < max_iteration; ++iteration) {
         local_solution.perturb();
         local_solution.localSearch();
         //  acceptance
-        uint64_t updated = local_solution.current_solution.count();
-        uint64_t current = current_solution.current_solution.count();
+        uint64_t updated = local_solution.current_solution_size;
+        uint64_t current = current_solution.current_solution_size;
         if (updated > current || non_changed_iteration > current) {
             current_solution = local_solution;
             if (updated > best_size) {
@@ -375,7 +364,6 @@ void CliqueLocalSearchExecutionContext::updateSetAndCandidates(uint64_t deleted,
             graph.confusion_matrix_bit_set_[deleted][inserted.second];
 
     tightness[deleted] = (current_solution_size - 1) + inserted_connected_to_deleted;
-//    std::cout << "Swap:=(" << inserted.first << ", " << inserted.second << ") <-" << deleted << std::endl;
     current_solution.set(deleted, false);
     current_solution.set(inserted.first, true);
     current_solution.set(inserted.second, true);
@@ -409,9 +397,9 @@ CliqueLocalSearchExecutionContext::build12SwapCandidatesSet(std::bitset<1024> cu
     for (std::size_t v = 0; v < graph.n_; ++v) {
         if (non_solution_vertices[v]) {
             // посчитать сколько НЕсоседей лежат в клике
-            if (tightness[v] == current_solution.count()) {
+            if (tightness[v] == current_solution_size) {
                 connected_to_clique.set(v, true);
-            } else if (tightness[v] == current_solution.count() - 1) {
+            } else if (tightness[v] == current_solution_size - 1) {
                 std::bitset<1024> not_neighbor_in_clique = (~graph.confusion_matrix_bit_set_[v]) & current_solution;
                 if (not_neighbor_in_clique.count() == 1) {
                     //найти первую и единственную вершину
@@ -449,7 +437,7 @@ void CliqueLocalSearchExecutionContext::perturb(size_t k) {
     std::mt19937 g(rd());
 
     for (std::size_t i = 0; i < k; ++i) {
-        std::uniform_int_distribution<> distrib(0, (int) (graph.n_ - current_solution.count() - 1));
+        std::uniform_int_distribution<> distrib(0, (int) (graph.n_ - current_solution_size - 1));
         std::size_t vertex_to_insert = distrib(g);
         std::size_t index_vertex_to_insert = 0;
         std::size_t skipped = 0;
@@ -503,7 +491,6 @@ void CliqueLocalSearchExecutionContext::localSearch() {
         updateSetAndCandidates(x_to_candidates.first, swap, candidates_1_2_swap);
         candidates_1_2_swap = build12SwapCandidatesSet(current_solution, tightness);
         it = candidates_1_2_swap.begin();
-//        tightness = calculateTightness(~current_solution);
     }
 #ifdef CHECK_SOLUTION
     if (!graph.isClique(current_solution)) {

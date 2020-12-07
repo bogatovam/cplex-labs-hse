@@ -74,9 +74,6 @@ public:
 
     void localSearch();
 
-    void updateSetAndCandidates(std::bitset<1024> deleted, uint64_t inserted,
-                                std::map<uint64_t, std::bitset<1024>> &candidates_1_2_swap);
-
     void updateSetAndCandidates(uint64_t deleted, std::pair<uint64_t, uint64_t> inserted,
                                 std::map<uint64_t, std::bitset<1024>> &candidates_1_2_swap);
 
@@ -95,8 +92,8 @@ class LocalSearchLauncher {
 public:
     static std::pair<double, std::bitset<1024>> localSearch(std::bitset<1024> initial_solution, const CqlGraph &graph,
                                                             const std::vector<double> &weights,
-                                                            std::size_t max_iteration = 10);
+                                                            std::size_t max_iteration = 100);
 
     static std::pair<uint64_t, std::bitset<1024>> localSearch(std::bitset<1024> initial_solution, const CqlGraph &graph,
-                                                              std::size_t max_iteration = 10);
+                                                              std::size_t max_iteration = 10000);
 };

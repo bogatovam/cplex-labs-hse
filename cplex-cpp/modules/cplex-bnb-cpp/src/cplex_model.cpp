@@ -96,14 +96,13 @@ void CplexModel::addConstraint(const IloRange &constraint) {
 }
 
 void CplexModel::reduceModel(std::size_t limit) {
-    if (all_constraints.size() > 100500) {
+    if (all_constraints.size() > limit) {
         std::vector<IloRange> to_delete;
         for (auto it = all_constraints.begin(); it != all_constraints.end();) {
             auto constraint = *it;
             double slack = cplex.getSlack(constraint.second);
             if (slack > 0.0) {
                 to_delete.push_back(constraint.second);
-//                std::cout << "Constraint " << constraint.first << " will be deleted; slack:=" << slack << std::endl;
                 it = all_constraints.erase(it);
             } else {
                 ++it;
