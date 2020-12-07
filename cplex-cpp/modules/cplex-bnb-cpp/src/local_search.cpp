@@ -4,6 +4,7 @@
 #include <include/shared.h>
 #include "include/local_search.h"
 #include <random>
+
 #define CHECK_SOLUTION
 
 LocalSearchExecutionContext::LocalSearchExecutionContext(const std::bitset<1024> &current_solution,
@@ -289,8 +290,7 @@ double WISLocalSearchExecutionContext::weight() {
 
 std::pair<double, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bitset<1024> initial_solution,
                                                                       const CqlGraph &graph,
-                                                                      const std::vector<double> &weights,
-                                                                      std::size_t max_iteration) {
+                                                                      const std::vector<double> &weights) {
     WISLocalSearchExecutionContext current_solution(initial_solution, graph, weights);
     current_solution.localSearch();
 
@@ -298,7 +298,7 @@ std::pair<double, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bitse
     double best_weight = current_solution.weight();
 
     WISLocalSearchExecutionContext local_solution = current_solution;
-    for (std::size_t iteration = 0; iteration < max_iteration; ++iteration) {
+    for (std::size_t iteration = 0; iteration < 100; ++iteration) {
         local_solution.perturb();
         local_solution.localSearch();
         //  acceptance
@@ -328,8 +328,7 @@ std::pair<double, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bitse
 }
 
 std::pair<uint64_t, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bitset<1024> initial_solution,
-                                                                        const CqlGraph &graph,
-                                                                        std::size_t max_iteration) {
+                                                                        const CqlGraph &graph) {
     CliqueLocalSearchExecutionContext current_solution(initial_solution, graph);
     current_solution.localSearch();
 
@@ -337,7 +336,7 @@ std::pair<uint64_t, std::bitset<1024>> LocalSearchLauncher::localSearch(std::bit
     uint64_t best_size = current_solution.current_solution_size;
     uint64_t non_changed_iteration = 0;
     CliqueLocalSearchExecutionContext local_solution = current_solution;
-    for (std::size_t iteration = 0; iteration < max_iteration; ++iteration) {
+    for (std::size_t iteration = 0; iteration < 10000; ++iteration) {
         local_solution.perturb();
         local_solution.localSearch();
         //  acceptance
@@ -494,8 +493,8 @@ void CliqueLocalSearchExecutionContext::localSearch() {
     }
 #ifdef CHECK_SOLUTION
     if (!graph.isClique(current_solution)) {
-            std::cout << "this is not clique" << std::endl;
-            throw std::runtime_error("this is not clique");
-        }
+        std::cout << "this is not clique" << std::endl;
+        throw std::runtime_error("this is not clique");
+    }
 #endif
 }

@@ -4,8 +4,6 @@
 #include <include/local_search.h>
 #include "include/max_clique_solver.h"
 
-#define CHECK_SOLUTION
-
 
 std::set<std::set<uint64_t>>
 max_clique_solver::buildAdjacencyConstraints(const CqlGraph &graph, const Strategy strategy) {
@@ -251,7 +249,7 @@ std::bitset<1024> max_clique_solver::getBestMaxClique(const CqlGraph &graph,
             best_clique = current_clique;
         }
     }
-    std::pair<uint64_t, std::bitset<1024>> improved_clique = LocalSearchLauncher::localSearch(best_clique, graph, 100);
+    std::pair<uint64_t, std::bitset<1024>> improved_clique = LocalSearchLauncher::localSearch(best_clique, graph);
     return improved_clique.second;
 }
 
@@ -494,6 +492,7 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
 
         max_upper_bound_delta = std::fabs(enhanced_solution.size - previous_upper_bound);
         previous_upper_bound = enhanced_solution.size;
+//      Не особо влияет на время, поэтому лимит ограничений достаточно большой
         current_model.reduceModel();
 
         if (max_upper_bound_delta < delta) {

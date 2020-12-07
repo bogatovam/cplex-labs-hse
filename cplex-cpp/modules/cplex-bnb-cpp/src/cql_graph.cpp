@@ -13,8 +13,6 @@
 
 #include <cassert>
 
-#define CHECK_SOLUTION
-
 CqlGraph::CqlGraph(
         const std::size_t n,
         const std::size_t m,

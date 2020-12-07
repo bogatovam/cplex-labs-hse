@@ -68,24 +68,24 @@ typedef std::pair<uint64_t, uint64_t> BranchingWays;
 
 class Timer {
 public:
-    std::atomic_bool is_time_over;
+    bool is_time_over = false;
 
     explicit Timer(std::chrono::steady_clock::duration time_to_execute) {
-        auto timer_func = [&]() {
-            std::this_thread::sleep_for(time_to_execute);
-            is_time_over = true;
-        };
-        timer = std::thread(timer_func);
-        is_time_over = false;
+//        auto timer_func = [&]() {
+//            std::this_thread::sleep_for(time_to_execute);
+//            is_time_over = true;
+//        };
+//        timer = std::thread(timer_func);
+//        is_time_over = false;
     }
 
     ~Timer() {
-        if (!is_time_over) {
-            TerminateThread(timer.native_handle(), 0);
-        }
-        timer.join();
+//        if (!is_time_over) {
+//            TerminateThread(timer.native_handle(), 0);
+//        }
+//        timer.join();
     }
 
 private:
-    std::thread timer;
+//    std::thread timer;
 };

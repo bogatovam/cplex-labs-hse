@@ -91,9 +91,7 @@ public:
 class LocalSearchLauncher {
 public:
     static std::pair<double, std::bitset<1024>> localSearch(std::bitset<1024> initial_solution, const CqlGraph &graph,
-                                                            const std::vector<double> &weights,
-                                                            std::size_t max_iteration = 100);
+                                                            const std::vector<double> &weights);
 
-    static std::pair<uint64_t, std::bitset<1024>> localSearch(std::bitset<1024> initial_solution, const CqlGraph &graph,
-                                                              std::size_t max_iteration = 10000);
+    static std::pair<uint64_t, std::bitset<1024>> localSearch(std::bitset<1024> initial_solution, const CqlGraph &graph);
 };
