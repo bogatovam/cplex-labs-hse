@@ -574,8 +574,8 @@ std::set<std::set<uint64_t>> max_clique_solver::ExecutionContext::separation(con
 
 std::set<std::set<uint64_t>> max_clique_solver::ExecutionContext::checkSolution(
         const FloatSolution &solution) {
-    std::cout << "CHECK INTEGER SOLUTION:\t(" << solution.size << ", " << solution.integer_variables_num << ")"
-              << std::endl;
+//    std::cout << "CHECK INTEGER SOLUTION:\t(" << solution.size << ", " << solution.integer_variables_num << ")"
+//              << std::endl;
 
     std::set<uint64_t> clique = solution.extractResult();
 

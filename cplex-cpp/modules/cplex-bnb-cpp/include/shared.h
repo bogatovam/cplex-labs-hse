@@ -72,7 +72,7 @@ public:
 
     explicit Timer(std::chrono::steady_clock::duration time_to_execute) {
         auto timer_func = [&]() {
-            std::this_thread::sleep_for(std::chrono::hours(1));
+            std::this_thread::sleep_for(time_to_execute);
             is_time_over = true;
         };
         timer = std::thread(timer_func);

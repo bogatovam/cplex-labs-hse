@@ -26,8 +26,8 @@ static const std::pair<std::string, uint64_t> GRAPHS_NAMES[] = {
         {"gen200_p0.9_44.clq", 44},
         {"brock200_4.clq",     17},
         {"san200_0.9_3.clq",   44},
-        {"brock200_1.clq",     21},
         {"p_hat300-2.clq",     25},
+        {"brock200_1.clq",     21},
         {"sanr200_0.7.clq",    18},
 };
 
