@@ -5,8 +5,6 @@
 #include "include/local_search.h"
 #include <random>
 
-#define CHECK_SOLUTION
-
 LocalSearchExecutionContext::LocalSearchExecutionContext(const std::bitset<1024> &current_solution,
                                                          const CqlGraph &graph,
                                                          std::uint64_t init)
@@ -106,15 +104,17 @@ std::vector<uint64_t> LocalSearchExecutionContext::calculateTightness(std::bitse
 void WISLocalSearchExecutionContext::localSearch() {
     std::map<uint64_t, std::bitset<1024>> candidates_1_2_swap = build12SwapCandidatesSet(current_solution,
                                                                                          tightness);
-    for (auto it = candidates_1_2_swap.begin(); it != candidates_1_2_swap.end(); ++it) {
+    for (auto it = candidates_1_2_swap.begin(); it != candidates_1_2_swap.end();) {
         auto x_to_candidates = *it;
         if (x_to_candidates.second.count() < 2) {
+            ++it;
             continue;
         }
 
         std::pair<uint64_t, uint64_t> swap = findFirst12Swap(weights[x_to_candidates.first], x_to_candidates.second);
 
         if (swap.first == UINT64_MAX) {
+            ++it;
             continue;
         }
         updateSetAndCandidates(x_to_candidates.first, swap, candidates_1_2_swap);
@@ -480,14 +480,16 @@ void CliqueLocalSearchExecutionContext::updateSet(std::bitset<1024> deleted, uin
 void CliqueLocalSearchExecutionContext::localSearch() {
     std::map<uint64_t, std::bitset<1024>> candidates_1_2_swap = build12SwapCandidatesSet(current_solution,
                                                                                          tightness);
-    for (auto it = candidates_1_2_swap.begin(); it != candidates_1_2_swap.end(); ++it) {
+    for (auto it = candidates_1_2_swap.begin(); it != candidates_1_2_swap.end();) {
         auto x_to_candidates = *it;
         if (x_to_candidates.second.count() < 2) {
+            ++it;
             continue;
         }
         std::pair<uint64_t, uint64_t> swap = findFirst12Swap(x_to_candidates.second);
 
         if (swap.first == UINT64_MAX) {
+            ++it;
             continue;
         }
         updateSetAndCandidates(x_to_candidates.first, swap, candidates_1_2_swap);

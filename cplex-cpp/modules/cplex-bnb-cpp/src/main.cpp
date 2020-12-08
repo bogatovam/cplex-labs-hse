@@ -17,7 +17,6 @@ int main() {
     csv_log.writeTitle("order  - greatest score first, improved ind set, nearest to integer");
     for (const auto &graph_name_and_best_solution: GRAPHS_NAMES) {
         CqlGraph graph = CqlGraph::readGraph("../../../graphs", graph_name_and_best_solution.first);
-//      graph::CqlGraph graph = graph::CqlGraph::readGraph("../../../graphs", graph_name);
         std::cout << "\n\n" + graph_name_and_best_solution.first << "\t vertices number = " << graph.n_ << std::endl;
         auto log = max_clique_solver::solve(graph, max_clique_solver::Strategy::BRANCH_AND_CUT);
 

@@ -21,7 +21,6 @@ max_clique_solver::buildAdjacencyConstraints(const CqlGraph &graph, const Strate
             }
         }
     }
-    //  add constraints for every v_i .. v_j: x_i + ... +  x_j <= 1 if E(v_i .. v_j) = 0
     std::vector<uint64_t> ordered = graph.orderVertices(NodesOrderingStrategy::SMALLEST_DEGREE_SUPPORT_FIRST);
 
     auto vertices_order = [&](uint64_t i, uint64_t j) {
@@ -184,9 +183,7 @@ CplexModel max_clique_solver::init_cplex_model(const CqlGraph &graph,
     std::set<std::set<uint64_t>> coloringConstraints = buildColoringConstraints(graph, map);
 
     constraints.insert(adjacencyConstraints.begin(), adjacencyConstraints.end());
-//    std::cout << "before " << constraints.size() << "\t";
     constraints.insert(coloringConstraints.begin(), coloringConstraints.end());
-//    std::cout << "after " << constraints.size() << std::endl;
 
     cplex_solver.addConstraints(constraints, 0, 1);
     return cplex_solver;
@@ -492,8 +489,7 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
 
         max_upper_bound_delta = std::fabs(enhanced_solution.size - previous_upper_bound);
         previous_upper_bound = enhanced_solution.size;
-//      Не особо влияет на время, поэтому лимит ограничений достаточно большой
-        current_model.reduceModel();
+
 
         if (max_upper_bound_delta < delta) {
             break;
@@ -516,6 +512,9 @@ void max_clique_solver::ExecutionContext::branchAndCut(CplexModel &current_model
             branchAndCut(current_model, solution);
         }
     }
+
+//      Не особо влияет на время, поэтому лимит ограничений достаточно большой
+    current_model.reduceModel();
 
     uint64_t branching_var = branchingFindNearestToInteger(enhanced_solution);
 
