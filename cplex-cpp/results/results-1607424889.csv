@@ -1,0 +1,3 @@
+graph,best possible solution,result,heuristic_result,timeout,time (sec),max_depth,branches_num,average_float_cplex_time,discarded_branches_num,average_cutting_time,average_cutting_iteration_time,
+order  - greatest score first, improved ind set, nearest to integer
+hamming6-2.clq,32,32.000000,32,0,0,1,1,0,1,0,0,
