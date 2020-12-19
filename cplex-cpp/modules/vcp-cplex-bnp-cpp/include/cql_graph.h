@@ -18,6 +18,8 @@ enum class NodesOrderingStrategy {
 };
 typedef Bitset Column;
 
+typedef std::pair<double, Column> WeightWithColumn;
+
 typedef std::map<NodesOrderingStrategy, std::vector<uint64_t>> ColoringByStrategy;
 
 typedef std::set<Column> IndependentSets;
@@ -108,5 +110,5 @@ public:
 
     IndependentSets getIndependentSetByColoring(const NodesOrderingStrategy &strategy) const;
 
-    Column supplementSetsToMaximumForInclusion(const Column &independent_set) const;
+    std::pair<bool, Column> supplementSetsToMaximumForInclusion(const Column &independent_set) const;
 };

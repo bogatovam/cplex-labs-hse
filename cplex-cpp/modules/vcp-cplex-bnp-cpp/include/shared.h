@@ -17,6 +17,8 @@ Bitset asBitset(const std::set<uint64_t> &set);
 
 std::set<uint64_t> asSet(const Bitset &set, std::size_t n);
 
+std::set<uint64_t> asSet(const std::vector<uint64_t>& vector);
+
 bool isNumberInteger(double number);
 
 bool isNumberCloseToInteger(double number, double eps = 0.00001);
@@ -64,15 +66,16 @@ public:
 };
 
 typedef Solution<double> FloatSolution;
+
 typedef Solution<uint64_t> IntegerSolution;
 
-class PrimalAndDualSolutions {
+class MainFloatSolution {
 public:
-    FloatSolution direct;
+    FloatSolution primal;
 
     FloatSolution dual;
 
-    PrimalAndDualSolutions &operator=(const PrimalAndDualSolutions &other) = default;
+    MainFloatSolution &operator=(const MainFloatSolution &other) = default;
 };
 
 class Timer {

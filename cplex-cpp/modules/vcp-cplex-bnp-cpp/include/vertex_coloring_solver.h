@@ -2,6 +2,7 @@
 #include "include/cplex_model.h"
 #include "include/cql_graph.h"
 #include <chrono>
+#include <src/slave_cplex_model.h>
 #include "csv_writer.h"
 
 using namespace std::chrono;
@@ -50,18 +51,30 @@ namespace vertex_coloring_solver {
 
         const double upper_bound = 1.0;
 
-        static double roundDownWithEpsilon(double objective_function_value, double eps = 0.00001);
+        static double roundUpWithEpsilon(double objective_function_value, double eps = 0.00001);
 
         static uint64_t branchingFindNearestToInteger(const FloatSolution &solution);
 
-        void branchAndPrice(CplexModel &current_model, const FloatSolution &current_solution);
+        void branchAndPrice(MainCplexModel &main_cplex_model, SlaveCplexModel &slave_cplex_model);
 
-        void startBranchAndPrice(CplexModel &model);
+        void startBranchAndPrice(MainCplexModel &main_cplex_model, SlaveCplexModel &slave_cplex_model);
+
+        WeightWithColumn findColumnToAddToModel(const FloatSolution &solution);
+
+        bool generateColumnsByHeuristic(MainCplexModel &main_cplex_model,
+                                        MainFloatSolution &current_solution);
+
+        double calculateWeight(const Column &independent_set, const std::vector<double> &weights);
+
+        bool isTailingOff(double source_delta, double target_delta = 0.001);
+
+        bool generateColumnsByCplex(MainCplexModel &main_cplex_model, SlaveCplexModel &slave_cplex_model,
+                                    MainFloatSolution &current_solution);
     };
 
     std::map<std::string, std::string> solve(const Graph &graph);
 
     IndependentSets solveByHeuristic(const Graph &graph);
 
-    MainCplexModel initCplexModel(const Graph &graph, const IndependentSets& columns);
+
 }

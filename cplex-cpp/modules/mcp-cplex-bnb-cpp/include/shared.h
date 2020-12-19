@@ -12,6 +12,7 @@
 #include <iostream>
 
 std::bitset<1024> asBitset(const std::set<uint64_t> &set);
+std::bitset<1024> asBitset(const std::set<uint64_t> &set);
 
 std::set<uint64_t> asSet(const std::bitset<1024> &set, std::size_t n);
 

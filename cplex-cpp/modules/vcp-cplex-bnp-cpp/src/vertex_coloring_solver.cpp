@@ -3,6 +3,7 @@
 #include <random>
 #include <include/local_search.h>
 #include "include/vertex_coloring_solver.h"
+#include "slave_cplex_model.h"
 
 std::map<std::string, std::string> vertex_coloring_solver::solve(const Graph &graph) {
     std::map<std::string, std::string> log;
@@ -10,27 +11,26 @@ std::map<std::string, std::string> vertex_coloring_solver::solve(const Graph &gr
 
     steady_clock::time_point begin = steady_clock::now();
     IndependentSets heuristic = solveByHeuristic(graph);
-    MainCplexModel main_cplex_model(heuristic, graph.n_);
+
+    SlaveCplexModel slave_cplex_model(graph);
     MainCplexModel main_cplex_model(heuristic, graph.n_);
 
     auto heuristic_time = steady_clock::now() - begin;
 
-    ExecutionContext bnc_context(best_clique.count(), hours(1), graph);
-    bnc_context.startBranchAndPrice(cplex_solver);
+    ExecutionContext bnp_context(heuristic.size(), hours(1), graph);
+    bnp_context.startBranchAndPrice(main_cplex_model, slave_cplex_model);
 
-    log["heuristic_time (sec)"] = std::to_string(duration_cast<seconds>(heuristic_time).count());
-    log["heuristic_time (ms)"] = std::to_string(duration_cast<milliseconds>(heuristic_time).count());
-    log["heuristic_result"] = std::to_string(best_clique.count());
-    log["cplex time (sec)"] = std::to_string(duration_cast<seconds>(bnc_context.metrics.total_execution_time).count());
+    log["heuristic_result"] = std::to_string(heuristic.size());
+    log["cplex time (sec)"] = std::to_string(duration_cast<seconds>(bnp_context.metrics.total_execution_time).count());
     log["cplex time (ms)"] = std::to_string(
-            duration_cast<milliseconds>(bnc_context.metrics.total_execution_time).count());
-    log["result"] = std::to_string(bnc_context.optimal_solution.size);
-    log["max_depth"] = std::to_string(bnc_context.metrics.max_depth);
-    log["branches_num"] = std::to_string(bnc_context.metrics.branches_num);
-    log["discarded_branches_num"] = std::to_string(bnc_context.metrics.discarded_branches_num);
+            duration_cast<milliseconds>(bnp_context.metrics.total_execution_time).count());
+    log["result"] = std::to_string(bnp_context.optimal_solution.size);
+    log["max_depth"] = std::to_string(bnp_context.metrics.max_depth);
+    log["branches_num"] = std::to_string(bnp_context.metrics.branches_num);
+    log["discarded_branches_num"] = std::to_string(bnp_context.metrics.discarded_branches_num);
     log["time (sec)"] = std::to_string(
-            duration_cast<seconds>(bnc_context.metrics.total_execution_time + heuristic_time).count());
-    log["timeout"] = std::to_string(bnc_context.timer.is_time_over);
+            duration_cast<seconds>(bnp_context.metrics.total_execution_time + heuristic_time).count());
+    log["timeout"] = std::to_string(bnp_context.timer.is_time_over);
     return log;
 }
 
@@ -43,13 +43,8 @@ IndependentSets vertex_coloring_solver::solveByHeuristic(const Graph &graph) {
     return result;
 }
 
-MainCplexModel vertex_coloring_solver::initCplexModel(const Graph &graph, const IndependentSets &columns) {
-    MainCplexModel main_cplex_model(columns, graph.n_);
-    return main_cplex_model;
-}
-
-double vertex_coloring_solver::ExecutionContext::roundDownWithEpsilon(double objective_function_value,
-                                                                      double eps) {
+double vertex_coloring_solver::ExecutionContext::roundUpWithEpsilon(double objective_function_value,
+                                                                    double eps) {
     if (isNumberInteger(objective_function_value)) {
         return objective_function_value;
     }
@@ -57,10 +52,10 @@ double vertex_coloring_solver::ExecutionContext::roundDownWithEpsilon(double obj
     double up = std::ceil(objective_function_value);
     double down = std::floor(objective_function_value);
 
-    if (objective_function_value + eps >= up) {
-        return up;
-    } else {
+    if (objective_function_value - eps <= down) {
         return down;
+    } else {
+        return up;
     }
 }
 
@@ -79,117 +74,153 @@ uint64_t vertex_coloring_solver::ExecutionContext::branchingFindNearestToInteger
     return nearest_to_one.first;
 }
 
-void vertex_coloring_solver::ExecutionContext::startBranchAndPrice(CplexModel &model) {
-    steady_clock::time_point begin = steady_clock::now();
-    branchAndPrice(model, model.getFloatSolution());
-    metrics.total_execution_time = steady_clock::now() - begin;
-}
-
-void vertex_coloring_solver::ExecutionContext::branchAndPrice(CplexModel &current_model,
-                                                              const FloatSolution &current_solution) {
-    if (timer.is_time_over) {
-        return;
-    }
-    metrics.onStartBranch();
-
-    double current_solution_size = roundDownWithEpsilon(current_solution.size);
-
-    if (this->optimal_solution.size >= current_solution_size) {
-        metrics.onDiscardedBranch();
-        return;
-    }
-
-    double delta = 0.01;
-    double max_upper_bound_delta = 0;
-    double previous_upper_bound = current_solution_size;
-
-    uint64_t iteration_count = 0;
-
-    FloatSolution enhanced_solution = current_solution;
-    metrics.onCuttingStart();
-    while (true) {
-        metrics.onCuttingIterationStart();
-        iteration_count++;
-
-        if (this->optimal_solution.size >= roundDownWithEpsilon(enhanced_solution.size)) {
-            metrics.onDiscardedBranch();
-            metrics.onCuttingIterationEnd();
-            metrics.onCuttingEnd(iteration_count);
-            metrics.onFinishBranch();
-            return;
-        }
-
-        std::set<std::set<uint64_t>> violated_constraint = separation(current_solution);
-
-        if (violated_constraint.empty()) {
-            break;
-        }
-
-        current_model.addRangeConstraints(violated_constraint, lower_bound, upper_bound);
-        enhanced_solution = current_model.getFloatSolution();
-
-        max_upper_bound_delta = std::fabs(enhanced_solution.size - previous_upper_bound);
-        previous_upper_bound = enhanced_solution.size;
-
-
-        if (max_upper_bound_delta < delta) {
-            break;
-        }
-        metrics.onCuttingIterationEnd();
-    }
-    metrics.onCuttingEnd(iteration_count);
-
-    if (enhanced_solution.integer_variables_num == enhanced_solution.values.size()) {
-        std::set<std::set<uint64_t>> violatedNonEdgeConstraints = checkSolution(enhanced_solution);
-        if (violatedNonEdgeConstraints.empty()) {
-            std::cout << "Found better integer solution " << "(" << enhanced_solution.size << " , "
-                      << enhanced_solution.integer_variables_num << ")\n";
-            this->optimal_solution = enhanced_solution;
-            metrics.onFinishBranch();
-            return;
-        } else {
-            auto constraints = current_model.addRangeConstraints(violatedNonEdgeConstraints, lower_bound, upper_bound);
-            auto solution = current_model.getFloatSolution();
-            branchAndPrice(current_model, solution);
-        }
-    }
-
-//      Не особо влияет на время, поэтому лимит ограничений достаточно большой
-    current_model.reduceModel();
-
-    uint64_t branching_var = branchingFindNearestToInteger(enhanced_solution);
-
-    IloRange down_constraint = current_model.addEqualityConstraintToVariable(branching_var, lower_bound);
-    metrics.onCplexFloatSolveStart();
-    FloatSolution down_solution = current_model.getFloatSolution();
-    metrics.onCplexFloatSolveFinish();
-    current_model.deleteConstraint(down_constraint);
-
-    IloRange up_constraint = current_model.addEqualityConstraintToVariable(branching_var, upper_bound);
-    metrics.onCplexFloatSolveStart();
-    FloatSolution up_solution = current_model.getFloatSolution();
-    metrics.onCplexFloatSolveFinish();
-    current_model.deleteConstraint(up_constraint);
-
-    std::vector<std::pair<IloRange, FloatSolution> > branches = {{down_constraint, down_solution},
-                                                                 {up_constraint,   up_solution}};
-    if (down_solution.integer_variables_num < up_solution.integer_variables_num ||
-        (down_solution.integer_variables_num == up_solution.integer_variables_num &&
-         down_solution.size < up_solution.size)) {
-        std::swap(branches[0], branches[1]);
-    }
-
-    for (const auto &branch: branches) {
-        current_model.addConstraint(branch.first);
-        branchAndPrice(current_model, branch.second);
-        current_model.deleteConstraint(branch.first);
-    }
-    metrics.onFinishBranch();
-}
-
 vertex_coloring_solver::ExecutionContext::ExecutionContext(std::size_t heuristic_size,
                                                            const steady_clock::duration &time_to_execute,
                                                            const Graph &graph) :
         optimal_solution({static_cast<double>(heuristic_size), std::vector<double>()}),
         timer(time_to_execute),
         graph(graph) {}
+
+
+void vertex_coloring_solver::ExecutionContext::startBranchAndPrice(MainCplexModel &main_cplex_model,
+                                                                   SlaveCplexModel &slave_cplex_model) {
+    steady_clock::time_point begin = steady_clock::now();
+    branchAndPrice(main_cplex_model, slave_cplex_model);
+    // TODO достать здесь значения переменных из модели и проверить решение на коррктность
+    metrics.total_execution_time = steady_clock::now() - begin;
+}
+
+
+void vertex_coloring_solver::ExecutionContext::branchAndPrice(MainCplexModel &main_cplex_model,
+                                                              SlaveCplexModel &slave_cplex_model) {
+    MainFloatSolution current_solution = main_cplex_model.solveFloatProblem();
+    bool is_need_to_solve_exactly = generateColumnsByHeuristic(main_cplex_model, current_solution);
+    if (is_need_to_solve_exactly) {
+        if (generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution)) {
+            metrics.onFinishBranch();
+            metrics.onDiscardedBranch();
+            return;
+        }
+    }
+    if (current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
+        if (!is_need_to_solve_exactly) {
+            bool just_to_test = generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution);
+            if (current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
+                std::cout << "Found better integer solution:=(" << current_solution.primal.size << ")\n";
+                this->optimal_solution = current_solution.primal;
+                metrics.onFinishBranch();
+                return;
+            }
+        } else {
+            std::cout << "Found better integer solution:=(" << current_solution.primal.size << ")\n";
+            this->optimal_solution = current_solution.primal;
+            metrics.onFinishBranch();
+            return;
+        }
+    }
+
+    uint64_t branching_var = branchingFindNearestToInteger(current_solution.primal);
+
+    main_cplex_model.includeColoringWithVariableIndex(branching_var);
+    branchAndPrice(main_cplex_model, slave_cplex_model);
+    main_cplex_model.removeBranchingRestrictionsFromVariable(branching_var);
+
+    main_cplex_model.excludeColoringWithVariableIndex(branching_var);
+    auto slave_forbidden_constraint = slave_cplex_model.addForbiddenSet(
+            main_cplex_model.getIndependentSetAssociatedWithVariableIndex(branching_var));
+    branchAndPrice(main_cplex_model, slave_cplex_model);
+    slave_cplex_model.removeForbiddenSet(slave_forbidden_constraint);
+    main_cplex_model.removeBranchingRestrictionsFromVariable(branching_var);
+
+    metrics.onFinishBranch();
+}
+
+
+// возвращается истина, если нужно запускать полное решение
+bool vertex_coloring_solver::ExecutionContext::generateColumnsByHeuristic(MainCplexModel &main_cplex_model,
+                                                                          MainFloatSolution &current_solution) {
+    double previous_upper_bound = roundUpWithEpsilon(current_solution.primal.size);
+    while (true) {
+        WeightWithColumn column_to_add = findColumnToAddToModel(current_solution.dual);
+        if (column_to_add.first < 1) {
+            return false;
+        }
+        bool isVariableExists = main_cplex_model.addColoringAsVariable(column_to_add.second);
+        if (isVariableExists) {
+            return true;
+        }
+        current_solution = main_cplex_model.solveFloatProblem();
+
+        if (isTailingOff(std::fabs(current_solution.primal.size - previous_upper_bound))) {
+            return true;
+        }
+        previous_upper_bound = current_solution.primal.size;
+    }
+}
+
+// возвращается истина, если можно отбросить ветку
+bool vertex_coloring_solver::ExecutionContext::generateColumnsByCplex(MainCplexModel &main_cplex_model,
+                                                                      SlaveCplexModel &slave_cplex_model,
+                                                                      MainFloatSolution &current_solution) {
+    double previous_upper_bound = roundUpWithEpsilon(current_solution.primal.size);;
+    while (true) {
+        slave_cplex_model.updateObjectiveFunction(current_solution.dual.values);
+        IntegerSolution slave_solution = slave_cplex_model.getIntegerSolution();
+        double lowerBound = roundUpWithEpsilon(current_solution.dual.size / slave_solution.size);
+
+        if (lowerBound >= optimal_solution.size) {
+            return true;
+        }
+        if (slave_solution.size <= 1) {
+            return false;
+        }
+        bool isVariableExists = main_cplex_model.addColoringAsVariable(slave_solution.values);
+        if (isVariableExists) {
+            return false;
+        }
+        current_solution = main_cplex_model.solveFloatProblem();
+
+        if (isTailingOff(std::fabs(current_solution.primal.size - previous_upper_bound))) {
+            return false;
+        }
+        previous_upper_bound = current_solution.primal.size;
+    }
+}
+
+//find The Mos tWeighty Violated Constraint in dual problem
+WeightWithColumn vertex_coloring_solver::ExecutionContext::findColumnToAddToModel(const FloatSolution &solution) {
+    auto coloring_independent_sets = graph.findWeightedIndependentSet(solution.values);
+    if (coloring_independent_sets.empty()) {
+        return {0, {}};
+    }
+    std::pair<double, std::set<uint64_t>> best_candidate = *coloring_independent_sets.rbegin();
+    WeightWithColumn improved = LocalSearchLauncher::localSearch(asBitset(best_candidate.second), graph,
+                                                                 solution.values);
+    std::pair<bool, Column> result = graph.supplementSetsToMaximumForInclusion(improved.second);
+#ifdef CHECK_SOLUTION
+    auto tmp = asSet(result, graph.n_);
+    if (!graph.isVerticesIndependent(tmp)) {
+        std::cout << "set is not independent" << std::endl;
+        throw std::runtime_error("set is not independent");
+    }
+#endif
+    if (result.first) {
+        return {calculateWeight(result.second, solution.values), result.second};
+    } else {
+        return improved;
+    }
+}
+
+double vertex_coloring_solver::ExecutionContext::calculateWeight(const Column &independent_set,
+                                                                 const std::vector<double> &weights) {
+    double result = 0.0;
+    for (std::size_t i = 0; i < graph.n_; ++i) {
+        if (!independent_set[i]) continue;
+        result += weights[i];
+    }
+    return result;
+}
+
+bool vertex_coloring_solver::ExecutionContext::isTailingOff(double source_delta, double target_delta) {
+    return source_delta < target_delta;
+}

@@ -9,6 +9,15 @@ Bitset asBitset(const std::set<uint64_t> &set) {
     return result;
 }
 
+std::set<uint64_t> asSet(const std::vector<uint64_t> &vector) {
+    std::set<uint64_t> result;
+    for (std::size_t v = 0; v < vector.size(); ++v) {
+        if (vector[v] != 1) continue;
+        result.emplace(v);
+    }
+    return result;
+}
+
 std::set<uint64_t> asSet(const Bitset &set, std::size_t n) {
     std::set<uint64_t> result;
     for (std::size_t v = 0; v < n; ++v) {

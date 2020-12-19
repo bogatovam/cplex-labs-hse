@@ -1,14 +1,39 @@
 #include "include/main_cplex_model.h"
 
-void MainCplexModel::addColoringAsVariable(const Column &coloring) {
-    std::size_t next_variable_index = model.getVariablesCount();
-    for (uint64_t i = 0; i < vertex_count; ++i) {
-        if (!coloring[i]) continue;
-        model.addVariable(next_variable_index++);
-        variable_index_to_branching_constraint.push_back(IloConstraint());
-        variable_index_to_independent_set.push_back(coloring);
-    }
+bool MainCplexModel::addColoringAsVariable(const Column &coloring) {
+    return addColoringAsVariable(asSet(coloring, vertex_count));
 }
+
+bool MainCplexModel::addColoringAsVariable(const std::vector<uint64_t> &coloring) {
+    return addColoringAsVariable(asSet(coloring));
+}
+
+bool MainCplexModel::addColoringAsVariable(const std::set<uint64_t> &coloring_as_set_of_vertices) {
+    for (const auto &existing_variable: variable_index_to_independent_set) {
+        if (existing_variable == coloring_as_set_of_vertices) {
+            return true;
+        }
+    }
+
+    std::size_t next_variable_index = model.getVariablesCount();
+    model.addVariable(next_variable_index);
+    variable_index_to_branching_constraint.push_back(IloConstraint());
+    variable_index_to_independent_set.push_back(coloring_as_set_of_vertices);
+
+    for (const uint64_t vertex_in_coloring: coloring_as_set_of_vertices) {
+        constraints[vertex_in_coloring].emplace(next_variable_index);
+        switchToNewConstraint(vertex_in_coloring);
+    }
+
+    return false;
+}
+
+void MainCplexModel::switchToNewConstraint(std::size_t variable_index) {
+    model.deleteConstraint(cplex_vertex_constraints[variable_index]);
+    cplex_vertex_constraints[variable_index] =
+            model.addGreaterThanOrEqualToConstraint(constraints[variable_index], 1);
+}
+
 
 void MainCplexModel::excludeColoringWithVariableIndex(std::size_t variable) {
     IloConstraint constraint = model.addLowerThanOrEqualToConstraint({variable}, 1);
@@ -24,7 +49,9 @@ void MainCplexModel::removeBranchingRestrictionsFromVariable(std::size_t variabl
     model.deleteConstraint(variable_index_to_branching_constraint[variable]);
 }
 
-MainCplexModel::MainCplexModel(const IndependentSets &initial_colorings, std::size_t vertex_count) :
+MainCplexModel::MainCplexModel(
+        const IndependentSets &initial_colorings, std::size_t
+vertex_count) :
         model(initial_colorings.size(), IloNumVar::Float, IloObjective::Minimize),
         vertex_count(vertex_count) {
     variable_index_to_independent_set.reserve(initial_colorings.size() * 10);
@@ -35,7 +62,7 @@ MainCplexModel::MainCplexModel(const IndependentSets &initial_colorings, std::si
     std::size_t i = 0;
     constraints = std::vector<std::set<uint64_t>>(vertex_count, std::set<uint64_t>());
     for (const auto &coloring: initial_colorings) {
-        variable_index_to_independent_set[i++] = coloring;
+        variable_index_to_independent_set[i++] = asSet(coloring, vertex_count);
         for (std::size_t v = 0; v < vertex_count; ++v) {
             if (!coloring[v]) continue;
             constraints[v].emplace(i);
@@ -44,7 +71,7 @@ MainCplexModel::MainCplexModel(const IndependentSets &initial_colorings, std::si
     cplex_vertex_constraints = model.addGreaterThanOrEqualToConstraints(constraints, 1);
 }
 
-PrimalAndDualSolutions MainCplexModel::solveFloatProblem() {
+MainFloatSolution MainCplexModel::solveFloatProblem() {
     IloCplex solver = model.getCplexSolver();
     bool isSolved = solver.solve();
     uint64_t variables_count = model.getVariablesCount();
@@ -75,4 +102,8 @@ PrimalAndDualSolutions MainCplexModel::solveFloatProblem() {
 
     return {{primal_obj_value, primal_variables},
             {dual_obj_value,   dual_variables}};
+}
+
+std::set<uint64_t> MainCplexModel::getIndependentSetAssociatedWithVariableIndex(size_t variable_index) {
+    return variable_index_to_independent_set[variable_index];
 }

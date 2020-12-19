@@ -17,8 +17,13 @@ public:
 
     void updateObjectiveFunction(const std::vector<double> &new_coefficients);
 
-    IloConstraint addForbiddenSet(const Column &column);
+    IloConstraint addForbiddenSet(const std::set<uint64_t> &set_vertices);
 
     IntegerSolution getIntegerSolution();
 
+    void turnOffTimeout();
+
+    void setTimeout(size_t seconds);
+
+    void removeForbiddenSet(const IloConstraint &constraint);
 };

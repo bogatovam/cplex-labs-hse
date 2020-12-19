@@ -44,9 +44,6 @@ SlaveCplexModel::SlaveCplexModel(const Graph &graph) :
     std::set<std::set<uint64_t>> all_constraints(cliques.begin(), cliques.end());
     all_constraints.insert(non_edges.begin(), non_edges.end());
     model.addRangeConstraints(all_constraints);
-
-    model.setCplexTimeLimitInSeconds(5);
-
     vertex_count = graph.n_;
 }
 
@@ -54,10 +51,20 @@ void SlaveCplexModel::updateObjectiveFunction(const std::vector<double> &new_coe
     model.updateObjectiveFunction(new_coefficients);
 }
 
-IloConstraint SlaveCplexModel::addForbiddenSet(const Column &column) {
-    std::set<uint64_t> set_vertices = asSet(column, vertex_count);
-    IloConstraint constraint = model.addRangeConstraint(set_vertices, 0, (double) set_vertices.size() - 1);
-    return constraint;
+IloConstraint SlaveCplexModel::addForbiddenSet(const std::set<uint64_t> &set_vertices) {
+    return model.addRangeConstraint(set_vertices, 0, (double) set_vertices.size() - 1);
+}
+
+void SlaveCplexModel::removeForbiddenSet(const IloConstraint &constraint) {
+    model.deleteConstraint(constraint);
+}
+
+void SlaveCplexModel::setTimeout(std::size_t seconds) {
+    model.setCplexTimeLimitInSeconds(seconds);
+}
+
+void SlaveCplexModel::turnOffTimeout() {
+    model.setCplexTimeLimitInSeconds(INT_MAX);
 }
 
 IntegerSolution SlaveCplexModel::getIntegerSolution() {

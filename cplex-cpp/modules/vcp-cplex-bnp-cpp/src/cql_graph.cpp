@@ -18,9 +18,9 @@ Graph::Graph(
         const std::size_t m,
         std::vector<std::set<uint64_t>> lists,
         std::vector<Bitset> matrix_b) : n_(n),
-                                                   m_(m),
-                                                   adjacency_lists_(std::move(lists)),
-                                                   confusion_matrix_bit_set_(std::move(matrix_b)) {}
+                                        m_(m),
+                                        adjacency_lists_(std::move(lists)),
+                                        confusion_matrix_bit_set_(std::move(matrix_b)) {}
 
 Graph Graph::readGraph(const std::string &graphs_path, const std::string &graph_name) {
     std::size_t n = 0;
@@ -122,7 +122,7 @@ Graph::getHeuristicMaxClique(const std::vector<uint64_t> &coloring, NodesOrderin
 }
 
 Bitset Graph::getHeuristicMaxCliqueRecursive(const std::vector<uint64_t> &coloring,
-                                                        NodesOrderingStrategy cs) const {
+                                             NodesOrderingStrategy cs) const {
     Bitset current_clique;
 
     Bitset used;
@@ -228,7 +228,7 @@ IndependentSets Graph::getIndependentSetByColoring(const NodesOrderingStrategy &
 #endif
     IndependentSets sets;
     for (auto const &color: coloring) {
-        sets.emplace(supplementSetsToMaximumForInclusion(color.second));
+        sets.emplace(supplementSetsToMaximumForInclusion(color.second).second);
     }
     return sets;
 }
@@ -482,7 +482,6 @@ bool Graph::isVerticesIndependent(std::set<uint64_t> &independent_set) const {
 
 std::set<std::pair<double, std::set<uint64_t >>> Graph::findWeightedIndependentSet(
         const std::vector<double> &weights) const {
-    // get init independent sets
     auto coloring = colorWeightedGraph(weights);
     std::set<std::pair<double, std::set<uint64_t >>> result;
     for (const auto &color_pair: coloring) {
@@ -542,7 +541,7 @@ std::vector<uint64_t> Graph::orderVerticesSaturationSmallestFirstWeighted(std::v
     return ordered_vertices;
 }
 
-Column Graph::supplementSetsToMaximumForInclusion(const Column &independent_set) const {
+std::pair<bool, Column> Graph::supplementSetsToMaximumForInclusion(const Column &independent_set) const {
     Column supplemented = independent_set;
     Column candidates = independent_set;
     for (std::size_t i = 0; i < n_; ++i) {
@@ -551,8 +550,10 @@ Column Graph::supplementSetsToMaximumForInclusion(const Column &independent_set)
     }
     candidates = ~candidates;
 
+    bool hasImprovements = false;
     for (std::size_t v = 0; v < n_; ++v) {
         if (candidates[v]) {
+            hasImprovements = true;
             supplemented.set(v, true);
         }
     }
@@ -562,7 +563,7 @@ Column Graph::supplementSetsToMaximumForInclusion(const Column &independent_set)
     throw std::runtime_error("set is not independent");
 }
 #endif
-    return supplemented;
+    return {hasImprovements, supplemented};
 }
 
 bool Graph::isVerticesIndependent(Column &independent_set) const {
