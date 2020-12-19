@@ -1,5 +1,4 @@
 #pragma once
-// Magic tricks to have CPLEX behave well:
 #ifndef IL_STD
 #define IL_STD
 #endif
@@ -13,13 +12,10 @@
 
 class CplexModel {
 private:
-    // CPLEX environment. Takes care of everything, including memory management for CPLEX objects.
+
     IloEnv env;
 
-    // CPLEX model. We put variables and constraints in it!
     IloModel model;
-
-    IloNumVarArray x;
 
     IloExpr expr;
 
@@ -27,25 +23,70 @@ private:
 
     IloCplex cplex;
 
-    std::map<std::string, IloRange> all_constraints;
+    std::map<std::string, IloConstraint> all_constraints;
 
-    IloRange buildConstraint(const std::set<uint64_t> &constraint, double lower_bound, double upper_bound);
+    std::vector<IloNumVar> variables;
+
+    IloObjective current_objective_function;
+
+    IloRange buildConstraint(const std::set<uint64_t> &constraint,
+                             double lower_bound,
+                             double upper_bound);
+
+    IloConstraint buildGreaterThanOrEqualToConstraint(const std::set<uint64_t> &constraint_set,
+                                                      double greater_than_or_equal_to);
 
 public:
-    explicit CplexModel(std::size_t variables_num);
+    CplexModel(size_t variables_num, IloNumVar::Type variable_type, IloObjective::Sense objective_sense);
 
-    IloRangeArray
-    addConstraints(const std::set<std::set<uint64_t>> &constraints, const double lower_bound, const double upper_bound);
+    IloConstraintArray addRangeConstraints(const std::set<std::set<uint64_t>> &constraints,
+                                           double lower_bound = 0,
+                                           double upper_bound = 1);
+
+    IloConstraint addRangeConstraint(const std::set<uint64_t> &constraint,
+                                           double lower_bound = 0,
+                                           double upper_bound = 1);
 
     void reduceModel(std::size_t limit = 5000);
 
-    IloRange addEqualityConstraintToVariable(uint64_t variable, double equals_to);
+    IloConstraint addEqualityConstraintToVariable(uint64_t variable, double equals_to);
 
-    FloatSolution getFloatSolution();
+    void deleteConstraint(const IloConstraint &constrain);
 
-    void deleteConstraint(const IloRange &constrain);
+    void addConstraint(const IloConstraint &constraint);
 
-    void addConstraint(const IloRange &constraint);
+    void deleteConstraints(const IloConstraintArray &constraints);
 
-    void deleteConstraints(const IloRangeArray &constraints);
+    IloConstraintArray addGreaterThanOrEqualToConstraints(const std::vector<std::set<uint64_t>> &constraints,
+                                                          double greater_than_or_equal_to);
+
+    IloConstraint addGreaterThanOrEqualToConstraint(const std::set<uint64_t> &constraint,
+                                                    double greater_than_or_equal_to);
+
+    IloConstraint addLowerThanOrEqualToConstraint(const std::set<uint64_t> &constraint,
+                                                  double lower_than_or_equal_to);
+
+    std::string getVariableNameFromIndex(uint16_t index) const;
+
+    void addVariable(size_t index,
+                     double lover_bound = 0,
+                     double upper_bound = 1,
+                     IloNumVar::Type type = IloNumVar::Float);
+
+    IloCplex getCplexSolver() const;
+
+    std::size_t getVariablesCount() const;
+
+    std::size_t getConstraintsCount() const;
+
+    std::vector<IloNumVar> getVariables() const;
+
+    std::map<std::string, IloConstraint> getConstraints() const;
+
+    IloConstraint buildLowerThanOrEqualToConstraint(const std::set<uint64_t> &constraint,
+                                                    double lower_than_or_equal_to);
+
+    void setCplexTimeLimitInSeconds(std::size_t seconds = 5);
+
+    void updateObjectiveFunction(const std::vector<double> &new_coefficients);
 };

@@ -13,21 +13,21 @@
 
 #include <cassert>
 
-CqlGraph::CqlGraph(
+Graph::Graph(
         const std::size_t n,
         const std::size_t m,
         std::vector<std::set<uint64_t>> lists,
-        std::vector<std::bitset<1024>> matrix_b) : n_(n),
+        std::vector<Bitset> matrix_b) : n_(n),
                                                    m_(m),
                                                    adjacency_lists_(std::move(lists)),
                                                    confusion_matrix_bit_set_(std::move(matrix_b)) {}
 
-CqlGraph CqlGraph::readGraph(const std::string &graphs_path, const std::string &graph_name) {
+Graph Graph::readGraph(const std::string &graphs_path, const std::string &graph_name) {
     std::size_t n = 0;
     std::size_t m = 0;
     std::vector<std::set<uint64_t>> adjacency_lists;
     // just big number
-    std::vector<std::bitset<1024>> confusion_matrix_bit_set;
+    std::vector<Bitset> confusion_matrix_bit_set;
 
     std::fstream file;
     file.open(graphs_path + "/" + graph_name, std::fstream::in | std::fstream::out | std::fstream::app);
@@ -55,7 +55,7 @@ CqlGraph CqlGraph::readGraph(const std::string &graphs_path, const std::string &
     }
 
     adjacency_lists.resize(n, std::set<uint64_t>());
-    confusion_matrix_bit_set.resize(n, std::bitset<1024>(false));
+    confusion_matrix_bit_set.resize(n, Bitset(false));
 
     while (std::getline(file, current_line)) {
         if (current_line[0] != 'e') {
@@ -71,11 +71,11 @@ CqlGraph CqlGraph::readGraph(const std::string &graphs_path, const std::string &
         confusion_matrix_bit_set[current_edge.second - 1][current_edge.first - 1] = true;
     }
     file.close();
-    return CqlGraph(n, m, adjacency_lists, confusion_matrix_bit_set);
+    return Graph(n, m, adjacency_lists, confusion_matrix_bit_set);
 }
 
 std::set<uint64_t>
-CqlGraph::getHeuristicMaxClique(const std::vector<uint64_t> &coloring, NodesOrderingStrategy cs) const {
+Graph::getHeuristicMaxClique(const std::vector<uint64_t> &coloring, NodesOrderingStrategy cs) const {
     std::set<uint64_t> current_clique = std::set<uint64_t>();
 
     auto cmp = [&](uint64_t i, uint64_t j) {
@@ -88,8 +88,8 @@ CqlGraph::getHeuristicMaxClique(const std::vector<uint64_t> &coloring, NodesOrde
     std::iota(vertices.begin(), vertices.end(), 0);
     std::sort(vertices.begin(), vertices.end(), cmp);
 
-    std::bitset<1024> used;
-    std::bitset<1024> candidates;
+    Bitset used;
+    Bitset candidates;
 
     candidates.set();
 
@@ -121,12 +121,12 @@ CqlGraph::getHeuristicMaxClique(const std::vector<uint64_t> &coloring, NodesOrde
     return current_clique;
 }
 
-std::bitset<1024> CqlGraph::getHeuristicMaxCliqueRecursive(const std::vector<uint64_t> &coloring,
-                                                           NodesOrderingStrategy cs) const {
-    std::bitset<1024> current_clique;
+Bitset Graph::getHeuristicMaxCliqueRecursive(const std::vector<uint64_t> &coloring,
+                                                        NodesOrderingStrategy cs) const {
+    Bitset current_clique;
 
-    std::bitset<1024> used;
-    std::bitset<1024> candidates;
+    Bitset used;
+    Bitset candidates;
 
     candidates.set();
 
@@ -142,7 +142,7 @@ std::bitset<1024> CqlGraph::getHeuristicMaxCliqueRecursive(const std::vector<uin
         if (candidates.none()) {
             break;
         }
-        CqlGraph subgraph = buildSubgraph(candidates);
+        Graph subgraph = buildSubgraph(candidates);
 
         auto curr_coloring_to_max_color = subgraph.colorGraph(cs);
         max_color = curr_coloring_to_max_color.second;
@@ -164,7 +164,7 @@ std::bitset<1024> CqlGraph::getHeuristicMaxCliqueRecursive(const std::vector<uin
 }
 
 // https://www.geeksforgeeks.org/graph-coloring-set-2-greedy-algorithm/
-std::pair<std::vector<uint64_t>, uint64_t> CqlGraph::colorGraph(const NodesOrderingStrategy &strategy) const {
+std::pair<std::vector<uint64_t>, uint64_t> Graph::colorGraph(const NodesOrderingStrategy &strategy) const {
     std::vector<uint64_t> ordered_vertices = orderVertices(strategy);
 
     uint64_t max_color = 0;
@@ -198,7 +198,42 @@ std::pair<std::vector<uint64_t>, uint64_t> CqlGraph::colorGraph(const NodesOrder
     return {colored_vertices, max_color};
 }
 
-std::map<uint64_t, std::set<uint64_t>> CqlGraph::colorWeightedGraph(const std::vector<double> &wights) const {
+IndependentSets Graph::getIndependentSetByColoring(const NodesOrderingStrategy &strategy) const {
+    std::vector<uint64_t> ordered_vertices = orderVertices(strategy);
+
+    std::map<uint64_t, Column> coloring;
+    std::vector<uint64_t> colored_vertices(n_, UINT64_MAX);
+    std::vector<bool> used_colors(n_, false);
+
+    for (const uint64_t v: ordered_vertices) {
+        for (const uint64_t neighbor: adjacency_lists_[v]) {
+            if (colored_vertices[neighbor] != UINT64_MAX) {
+                used_colors[colored_vertices[neighbor]] = true;
+            }
+        }
+
+        std::size_t min_color = 0;
+        while (used_colors[min_color]) min_color++;
+
+        colored_vertices[v] = min_color;
+        coloring[min_color].set(v, true);
+
+        std::fill(used_colors.begin(), used_colors.end(), 0);
+    }
+#ifdef CHECK_SOLUTION
+    if (!isColoringCorrect(colored_vertices)) {
+        std::cout << "this coloring is not correct" << std::endl;
+        throw std::runtime_error("this coloring is not correct");
+    }
+#endif
+    IndependentSets sets;
+    for (auto const &color: coloring) {
+        sets.emplace(supplementSetsToMaximumForInclusion(color.second));
+    }
+    return sets;
+}
+
+std::map<uint64_t, std::set<uint64_t>> Graph::colorWeightedGraph(const std::vector<double> &wights) const {
     std::vector<uint64_t> vertices(n_, 0);
     std::iota(vertices.begin(), vertices.end(), 0);
 
@@ -235,7 +270,7 @@ std::map<uint64_t, std::set<uint64_t>> CqlGraph::colorWeightedGraph(const std::v
     return coloring;
 }
 
-std::vector<uint64_t> CqlGraph::orderVertices(const NodesOrderingStrategy &strategy) const {
+std::vector<uint64_t> Graph::orderVertices(const NodesOrderingStrategy &strategy) const {
     std::vector<uint64_t> vertices(n_, 0);
     std::iota(vertices.begin(), vertices.end(), 0);
 
@@ -256,17 +291,17 @@ std::vector<uint64_t> CqlGraph::orderVertices(const NodesOrderingStrategy &strat
     return std::vector<uint64_t>();
 }
 
-std::vector<uint64_t> CqlGraph::orderVerticesLatestDegreeFirst(std::vector<uint64_t> vertices) const {
+std::vector<uint64_t> Graph::orderVerticesLatestDegreeFirst(std::vector<uint64_t> vertices) const {
     std::sort(vertices.begin(), vertices.end(), [&](uint64_t i, uint64_t j) { return degree(i) > degree(j); });
     return vertices;
 }
 
-std::vector<uint64_t> CqlGraph::orderVerticesSmallestDegreeFirst(std::vector<uint64_t> vertices) const {
+std::vector<uint64_t> Graph::orderVerticesSmallestDegreeFirst(std::vector<uint64_t> vertices) const {
     std::sort(vertices.begin(), vertices.end(), [&](uint64_t i, uint64_t j) { return degree(i) < degree(j); });
     return vertices;
 }
 
-std::vector<uint64_t> CqlGraph::verticesSupport() const {
+std::vector<uint64_t> Graph::verticesSupport() const {
     std::vector<uint64_t> supports(n_, 0);
     for (std::size_t i = 0; i < n_; ++i) {
         for (const uint64_t neighbor: adjacency_lists_[i]) {
@@ -276,7 +311,7 @@ std::vector<uint64_t> CqlGraph::verticesSupport() const {
     return supports;
 }
 
-std::vector<uint64_t> CqlGraph::orderVerticesSmallestDegreeSupportFirst(std::vector<uint64_t> vertices) const {
+std::vector<uint64_t> Graph::orderVerticesSmallestDegreeSupportFirst(std::vector<uint64_t> vertices) const {
     std::vector<uint64_t> mutable_degrees(n_, 0);
     std::vector<uint64_t> support = verticesSupport();
     std::vector<uint64_t> ordered_vertices;
@@ -317,14 +352,14 @@ std::vector<uint64_t> CqlGraph::orderVerticesSmallestDegreeSupportFirst(std::vec
     return ordered_vertices;
 }
 
-std::vector<uint64_t> CqlGraph::orderVerticesRandom(std::vector<uint64_t> vertices) const {
+std::vector<uint64_t> Graph::orderVerticesRandom(std::vector<uint64_t> vertices) const {
     std::random_device rd;
     std::mt19937 g(rd());
     std::shuffle(vertices.begin(), vertices.end(), g);
     return vertices;
 }
 
-std::vector<uint64_t> CqlGraph::orderVerticesSaturationSmallestFirst(std::vector<uint64_t> vertices) const {
+std::vector<uint64_t> Graph::orderVerticesSaturationSmallestFirst(std::vector<uint64_t> vertices) const {
     std::vector<uint64_t> ordered_vertices;
     std::vector<uint64_t> saturation(n_, 0);
 
@@ -357,7 +392,7 @@ std::vector<uint64_t> CqlGraph::orderVerticesSaturationSmallestFirst(std::vector
     return ordered_vertices;
 }
 
-bool CqlGraph::isColoringCorrect(std::vector<uint64_t> coloring) const {
+bool Graph::isColoringCorrect(std::vector<uint64_t> coloring) const {
     for (std::size_t i = 0; i < n_; ++i) {
         uint64_t current_color = coloring[i];
         for (const uint64_t neighbor: adjacency_lists_[i]) {
@@ -369,7 +404,7 @@ bool CqlGraph::isColoringCorrect(std::vector<uint64_t> coloring) const {
     return true;
 }
 
-bool CqlGraph::isClique(const std::set<uint64_t> &clique) const {
+bool Graph::isClique(const std::set<uint64_t> &clique) const {
     for (const uint64_t v1: clique) {
         for (const uint64_t v2: clique) {
             if (v1 != v2 && !(confusion_matrix_bit_set_[v1][v2])) {
@@ -380,7 +415,7 @@ bool CqlGraph::isClique(const std::set<uint64_t> &clique) const {
     return true;
 }
 
-bool CqlGraph::isClique(const std::bitset<1024> &clique) const {
+bool Graph::isClique(const Bitset &clique) const {
 
     for (std::size_t v = 0; v < n_; ++v) {
         for (std::size_t u = 0; u < n_; ++u) {
@@ -394,19 +429,18 @@ bool CqlGraph::isClique(const std::bitset<1024> &clique) const {
     return true;
 }
 
-CqlGraph CqlGraph::buildSubgraph(std::bitset<1024> vertices) const {
+Graph Graph::buildSubgraph(Bitset vertices) const {
     std::vector<std::set<uint64_t>> lists(n_);
-    std::vector<std::bitset<1024>> matrix_b(n_);
+    std::vector<Bitset> matrix_b(n_);
 
     for (std::size_t v = 0; v < n_; ++v) {
         if (!vertices[v]) {
-            matrix_b[v] = std::bitset<1024>();
+            matrix_b[v] = Bitset();
         } else {
             matrix_b[v] = confusion_matrix_bit_set_[v] & vertices;
         }
     }
 
-    // может убрать ?
     for (std::size_t v = 0; v < n_; ++v) {
         for (std::size_t u = v; u < n_; ++u) {
             if (matrix_b[v][u]) {
@@ -416,10 +450,10 @@ CqlGraph CqlGraph::buildSubgraph(std::bitset<1024> vertices) const {
         }
     }
 
-    return CqlGraph(n_, 0, lists, matrix_b);
+    return Graph(n_, 0, lists, matrix_b);
 }
 
-uint64_t CqlGraph::findCliqueBestCandidate(const std::vector<uint64_t> &curr_coloring, CqlGraph graph) const {
+uint64_t Graph::findCliqueBestCandidate(const std::vector<uint64_t> &curr_coloring, Graph graph) const {
     auto cmp = [&](uint64_t i, uint64_t j) {
         return (curr_coloring[i] > curr_coloring[j]) ||
                ((curr_coloring[i] == curr_coloring[j]) && (graph.degree(i) < graph.degree(j))) ||
@@ -434,7 +468,7 @@ uint64_t CqlGraph::findCliqueBestCandidate(const std::vector<uint64_t> &curr_col
     return best_candidate;
 }
 
-bool CqlGraph::isVerticesIndependent(std::set<uint64_t> &independent_set) const {
+bool Graph::isVerticesIndependent(std::set<uint64_t> &independent_set) const {
     for (auto v: independent_set) {
         for (auto u: independent_set) {
             if (u != v && confusion_matrix_bit_set_[v][u]) {
@@ -446,7 +480,7 @@ bool CqlGraph::isVerticesIndependent(std::set<uint64_t> &independent_set) const 
     return true;
 }
 
-std::set<std::pair<double, std::set<uint64_t >>> CqlGraph::findWeightedIndependentSet(
+std::set<std::pair<double, std::set<uint64_t >>> Graph::findWeightedIndependentSet(
         const std::vector<double> &weights) const {
     // get init independent sets
     auto coloring = colorWeightedGraph(weights);
@@ -464,8 +498,8 @@ std::set<std::pair<double, std::set<uint64_t >>> CqlGraph::findWeightedIndepende
     return result;
 }
 
-std::vector<uint64_t> CqlGraph::orderVerticesSaturationSmallestFirstWeighted(std::vector<uint64_t> vertices,
-                                                                             const std::vector<double> &wights) const {
+std::vector<uint64_t> Graph::orderVerticesSaturationSmallestFirstWeighted(std::vector<uint64_t> vertices,
+                                                                          const std::vector<double> &wights) const {
     std::vector<uint64_t> mutable_degrees(n_, 0);
     std::vector<uint64_t> support = verticesSupport();
     std::vector<uint64_t> ordered_vertices;
@@ -507,3 +541,65 @@ std::vector<uint64_t> CqlGraph::orderVerticesSaturationSmallestFirstWeighted(std
     }
     return ordered_vertices;
 }
+
+Column Graph::supplementSetsToMaximumForInclusion(const Column &independent_set) const {
+    Column supplemented = independent_set;
+    Column candidates = independent_set;
+    for (std::size_t i = 0; i < n_; ++i) {
+        if (!independent_set[i]) continue;
+        candidates |= confusion_matrix_bit_set_[i];
+    }
+    candidates = ~candidates;
+
+    for (std::size_t v = 0; v < n_; ++v) {
+        if (candidates[v]) {
+            supplemented.set(v, true);
+        }
+    }
+#ifdef CHECK_SOLUTION
+    if (!isVerticesIndependent(supplemented)) {
+    std::cout << "set is not independent" << std::endl;
+    throw std::runtime_error("set is not independent");
+}
+#endif
+    return supplemented;
+}
+
+bool Graph::isVerticesIndependent(Column &independent_set) const {
+    for (std::size_t v = 0; v < n_; ++v) {
+        if (!independent_set[v]) continue;
+        for (std::size_t u = 0; v < n_; ++v) {
+            if (!independent_set[u]) continue;
+            if (u != v && confusion_matrix_bit_set_[v][u]) {
+                std::cout << u << "\t" << v << std::endl;
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+Graph Graph::buildComplementGraph() const {
+    std::vector<std::set<uint64_t>> lists(n_);
+    std::vector<Bitset> matrix_b(n_);
+
+    for (std::size_t v = 0; v < n_; ++v) {
+        matrix_b[v] = ~confusion_matrix_bit_set_[v];
+        for (std::size_t u = n_; u < n_; ++u) {
+            matrix_b[v].set(u, false);
+        }
+        matrix_b[v].set(v, false);
+    }
+
+    for (std::size_t v = 0; v < n_; ++v) {
+        for (std::size_t u = v; u < n_; ++u) {
+            if (matrix_b[v][u]) {
+                lists[v].insert(u);
+                lists[u].insert(v);
+            }
+        }
+    }
+
+    return Graph(n_, 0, lists, matrix_b);
+}
+

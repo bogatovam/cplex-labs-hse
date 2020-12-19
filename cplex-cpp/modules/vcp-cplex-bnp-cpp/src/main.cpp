@@ -16,7 +16,7 @@ int main() {
     CsvWriter csv_log("./", "results-" + utils::get_current_datetime_str() + ".csv", test);
     csv_log.writeTitle("");
     for (const auto &graph_name_and_best_solution: GRAPHS_NAMES) {
-        CqlGraph graph = CqlGraph::readGraph("../../../graphs", graph_name_and_best_solution.first);
+        Graph graph = Graph::readGraph("../../../graphs", graph_name_and_best_solution.first);
         std::cout << "\n\n" + graph_name_and_best_solution.first << "\t vertices number = " << graph.n_ << std::endl;
         auto log = vertex_coloring_solver::solve(graph, vertex_coloring_solver::Strategy::BRANCH_AND_CUT);
 

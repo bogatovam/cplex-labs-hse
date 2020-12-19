@@ -4,30 +4,14 @@
 #include <include/local_search.h>
 #include "include/vertex_coloring_solver.h"
 
-
-CplexModel vertex_coloring_solver::init_cplex_model(const CqlGraph &graph,
-                                                    const std::map<NodesOrderingStrategy, std::vector<uint64_t>> &map) {
-    CplexModel cplex_solver(graph.n_);
-
-    std::set<std::set<uint64_t>> constraints;
-    std::set<std::set<uint64_t>> adjacencyConstraints = buildAdjacencyConstraints(graph, strategy);
-    std::set<std::set<uint64_t>> coloringConstraints = buildColoringConstraints(graph, map);
-
-    constraints.insert(adjacencyConstraints.begin(), adjacencyConstraints.end());
-    constraints.insert(coloringConstraints.begin(), coloringConstraints.end());
-
-    cplex_solver.addConstraints(constraints, 0, 1);
-    return cplex_solver;
-}
-
-std::map<std::string, std::string> vertex_coloring_solver::solve(const CqlGraph &graph) {
+std::map<std::string, std::string> vertex_coloring_solver::solve(const Graph &graph) {
     std::map<std::string, std::string> log;
     std::map<NodesOrderingStrategy, std::vector<uint64_t>> coloring_by_strategy;
 
     steady_clock::time_point begin = steady_clock::now();
-
-    std::bitset<1024> best_clique = getBestMaxClique(graph, coloring_by_strategy);
-    CplexModel cplex_solver = init_cplex_model(graph, coloring_by_strategy, calc_strategy);
+    IndependentSets heuristic = solveByHeuristic(graph);
+    MainCplexModel main_cplex_model(heuristic, graph.n_);
+    MainCplexModel main_cplex_model(heuristic, graph.n_);
 
     auto heuristic_time = steady_clock::now() - begin;
 
@@ -48,6 +32,20 @@ std::map<std::string, std::string> vertex_coloring_solver::solve(const CqlGraph 
             duration_cast<seconds>(bnc_context.metrics.total_execution_time + heuristic_time).count());
     log["timeout"] = std::to_string(bnc_context.timer.is_time_over);
     return log;
+}
+
+IndependentSets vertex_coloring_solver::solveByHeuristic(const Graph &graph) {
+    IndependentSets result;
+    for (auto coloring_strategy: nodes_ordering_strategies) {
+        IndependentSets current_independent_sets = graph.getIndependentSetByColoring(coloring_strategy);
+        result.insert(current_independent_sets.begin(), current_independent_sets.end());
+    }
+    return result;
+}
+
+MainCplexModel vertex_coloring_solver::initCplexModel(const Graph &graph, const IndependentSets &columns) {
+    MainCplexModel main_cplex_model(columns, graph.n_);
+    return main_cplex_model;
 }
 
 double vertex_coloring_solver::ExecutionContext::roundDownWithEpsilon(double objective_function_value,
@@ -80,13 +78,6 @@ uint64_t vertex_coloring_solver::ExecutionContext::branchingFindNearestToInteger
     }
     return nearest_to_one.first;
 }
-
-vertex_coloring_solver::ExecutionContext::ExecutionContext(std::size_t heuristic_size,
-                                                           const steady_clock::duration &time_to_execute,
-                                                           const CqlGraph &graph) :
-        optimal_solution({static_cast<double>(heuristic_size), std::vector<double>()}),
-        timer(time_to_execute),
-        graph(graph) {}
 
 void vertex_coloring_solver::ExecutionContext::startBranchAndPrice(CplexModel &model) {
     steady_clock::time_point begin = steady_clock::now();
@@ -134,7 +125,7 @@ void vertex_coloring_solver::ExecutionContext::branchAndPrice(CplexModel &curren
             break;
         }
 
-        current_model.addConstraints(violated_constraint, lower_bound, upper_bound);
+        current_model.addRangeConstraints(violated_constraint, lower_bound, upper_bound);
         enhanced_solution = current_model.getFloatSolution();
 
         max_upper_bound_delta = std::fabs(enhanced_solution.size - previous_upper_bound);
@@ -157,7 +148,7 @@ void vertex_coloring_solver::ExecutionContext::branchAndPrice(CplexModel &curren
             metrics.onFinishBranch();
             return;
         } else {
-            auto constraints = current_model.addConstraints(violatedNonEdgeConstraints, lower_bound, upper_bound);
+            auto constraints = current_model.addRangeConstraints(violatedNonEdgeConstraints, lower_bound, upper_bound);
             auto solution = current_model.getFloatSolution();
             branchAndPrice(current_model, solution);
         }
@@ -196,3 +187,9 @@ void vertex_coloring_solver::ExecutionContext::branchAndPrice(CplexModel &curren
     metrics.onFinishBranch();
 }
 
+vertex_coloring_solver::ExecutionContext::ExecutionContext(std::size_t heuristic_size,
+                                                           const steady_clock::duration &time_to_execute,
+                                                           const Graph &graph) :
+        optimal_solution({static_cast<double>(heuristic_size), std::vector<double>()}),
+        timer(time_to_execute),
+        graph(graph) {}

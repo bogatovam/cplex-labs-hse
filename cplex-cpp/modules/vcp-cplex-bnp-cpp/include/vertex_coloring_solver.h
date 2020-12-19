@@ -1,3 +1,4 @@
+#include "include/main_cplex_model.h"
 #include "include/cplex_model.h"
 #include "include/cql_graph.h"
 #include <chrono>
@@ -35,7 +36,7 @@ namespace vertex_coloring_solver {
     public:
         explicit ExecutionContext(std::size_t heuristic_size,
                                   const steady_clock::duration &time_to_execute,
-                                  const CqlGraph &graph);
+                                  const Graph &graph);
 
         FloatSolution optimal_solution;
 
@@ -43,7 +44,7 @@ namespace vertex_coloring_solver {
 
         Timer timer;
 
-        const CqlGraph &graph;
+        const Graph &graph;
 
         const double lower_bound = 0.0;
 
@@ -58,8 +59,9 @@ namespace vertex_coloring_solver {
         void startBranchAndPrice(CplexModel &model);
     };
 
-    CplexModel init_cplex_model(const CqlGraph &graph,
-                                const std::map<NodesOrderingStrategy, std::vector<uint64_t>> &map);
+    std::map<std::string, std::string> solve(const Graph &graph);
 
-    std::map<std::string, std::string> solve(const CqlGraph &graph);
+    IndependentSets solveByHeuristic(const Graph &graph);
+
+    MainCplexModel initCplexModel(const Graph &graph, const IndependentSets& columns);
 }

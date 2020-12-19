@@ -5,31 +5,31 @@
 
 class LocalSearchExecutionContext {
 public:
-    LocalSearchExecutionContext(const CqlGraph &graph,
-                                std::bitset<1024> current_solution,
+    LocalSearchExecutionContext(const Graph &graph,
+                                Bitset current_solution,
                                 std::size_t current_solution_size,
-                                std::bitset<1024> non_solution_vertices,
+                                Bitset non_solution_vertices,
                                 std::vector<uint64_t> tightness);
 
-    const CqlGraph &graph;
+    const Graph &graph;
 
-    std::bitset<1024> current_solution;
+    Bitset current_solution;
 
     std::size_t current_solution_size;
 
-    std::bitset<1024> non_solution_vertices;
+    Bitset non_solution_vertices;
 
     std::vector<uint64_t> tightness;
 
-    LocalSearchExecutionContext(const std::bitset<1024> &current_solution, const CqlGraph &graph, std::uint64_t init = 0);
+    LocalSearchExecutionContext(const Bitset &current_solution, const Graph &graph, std::uint64_t init = 0);
 
-    std::vector<uint64_t> calculateTightness(std::bitset<1024> possible_candidates, std::uint64_t init = 0) const;
+    std::vector<uint64_t> calculateTightness(Bitset possible_candidates, std::uint64_t init = 0) const;
 };
 
 class CliqueLocalSearchExecutionContext : public LocalSearchExecutionContext {
 public:
-    CliqueLocalSearchExecutionContext(const std::bitset<1024> &current_is,
-                                      const CqlGraph &graph);
+    CliqueLocalSearchExecutionContext(const Bitset &current_is,
+                                      const Graph &graph);
 
 
     CliqueLocalSearchExecutionContext(const CliqueLocalSearchExecutionContext &context);
@@ -38,25 +38,53 @@ public:
 
 
     void updateSetAndCandidates(uint64_t deleted, std::pair<uint64_t, uint64_t> inserted,
-                                std::map<uint64_t, std::bitset<1024>> &candidates_1_2_swap);
+                                std::map<uint64_t, Bitset> &candidates_1_2_swap);
 
-    std::map<uint64_t, std::bitset<1024>>
-    build12SwapCandidatesSet(std::bitset<1024> current_solution,
+    std::map<uint64_t, Bitset>
+    build12SwapCandidatesSet(Bitset current_solution,
                              const std::vector<uint64_t> &tightness) const;
 
-    std::pair<uint64_t, uint64_t> findFirst12Swap(std::bitset<1024> subgraph) const;
+    std::pair<uint64_t, uint64_t> findFirst12Swap(Bitset subgraph) const;
 
     void perturb(size_t k = 1);
 
-    void updateSet(std::bitset<1024> deleted, uint64_t inserted);
+    void updateSet(Bitset deleted, uint64_t inserted);
+
+    void localSearch();
+};
+
+
+class ISLocalSearchExecutionContext : public LocalSearchExecutionContext {
+public:
+    ISLocalSearchExecutionContext(const Bitset &current_is,
+                                  const Graph &graph);
+
+
+    ISLocalSearchExecutionContext(const ISLocalSearchExecutionContext &context);
+
+    ISLocalSearchExecutionContext &operator=(const ISLocalSearchExecutionContext &other);
+
+
+    void updateSetAndCandidates(uint64_t deleted, std::pair<uint64_t, uint64_t> inserted,
+                                std::map<uint64_t, Bitset> &candidates_1_2_swap);
+
+    std::map<uint64_t, Bitset> build12SwapCandidatesSet(
+            Bitset current_solution,
+            const std::vector<uint64_t> &tightness) const;
+
+    std::pair<uint64_t, uint64_t> findFirst12Swap(Bitset candidates) const;
+
+    void perturb(size_t k = 1);
+
+    void updateSet(Bitset deleted, uint64_t inserted);
 
     void localSearch();
 };
 
 class WISLocalSearchExecutionContext : public LocalSearchExecutionContext {
 public:
-    WISLocalSearchExecutionContext(const std::bitset<1024> &current_is,
-                                   const CqlGraph &graph,
+    WISLocalSearchExecutionContext(const Bitset &current_is,
+                                   const Graph &graph,
                                    const std::vector<double> &weights);
 
 
@@ -68,30 +96,33 @@ public:
 
     const std::vector<double> &weights;
 
-    std::vector<double> WISLocalSearchExecutionContext::calculateWeightsDiff();
+    std::vector<double> calculateWeightsDiff();
 
     double weight();
 
     void localSearch();
 
     void updateSetAndCandidates(uint64_t deleted, std::pair<uint64_t, uint64_t> inserted,
-                                std::map<uint64_t, std::bitset<1024>> &candidates_1_2_swap);
+                                std::map<uint64_t, Bitset> &candidates_1_2_swap);
 
-    std::map<uint64_t, std::bitset<1024>>
-    build12SwapCandidatesSet(std::bitset<1024> current_solution,
+    std::map<uint64_t, Bitset>
+    build12SwapCandidatesSet(Bitset current_solution,
                              const std::vector<uint64_t> &tightness) const;
 
-    std::pair<uint64_t, uint64_t> findFirst12Swap(double w_to_delete, const std::bitset<1024> &candidates) const;
+    std::pair<uint64_t, uint64_t> findFirst12Swap(double w_to_delete, const Bitset &candidates) const;
 
     void perturb(size_t k = 1);
 
-    void updateSet(std::bitset<1024> deleted, uint64_t inserted);
+    void updateSet(Bitset deleted, uint64_t inserted);
 };
 
 class LocalSearchLauncher {
 public:
-    static std::pair<double, std::bitset<1024>> localSearch(std::bitset<1024> initial_solution, const CqlGraph &graph,
-                                                            const std::vector<double> &weights);
+    static std::pair<double, Bitset> localSearch(Bitset initial_solution, const Graph &graph,
+                                                 const std::vector<double> &weights);
 
-    static std::pair<uint64_t, std::bitset<1024>> localSearch(std::bitset<1024> initial_solution, const CqlGraph &graph);
+    static std::pair<uint64_t, Bitset> localSearch(Bitset initial_solution, const Graph &graph);
+
+    static std::pair<double, Bitset> independentSetLocalSearch(Bitset initial_solution,
+                                                               const Graph &graph);
 };

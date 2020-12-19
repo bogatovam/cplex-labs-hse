@@ -11,9 +11,11 @@
 #include <atomic>
 #include <iostream>
 
-std::bitset<1024> asBitset(const std::set<uint64_t> &set);
+typedef std::bitset<1024> Bitset;
 
-std::set<uint64_t> asSet(const std::bitset<1024> &set, std::size_t n);
+Bitset asBitset(const std::set<uint64_t> &set);
+
+std::set<uint64_t> asSet(const Bitset &set, std::size_t n);
 
 bool isNumberInteger(double number);
 
@@ -23,9 +25,9 @@ template<class T>
 class Solution {
 public:
 
-    double size;
+    T size;
 
-    T values;
+    std::vector<T> values;
 
     uint64_t integer_variables_num = 0;
 
@@ -36,11 +38,11 @@ public:
         return *this;
     }
 
-    Solution(double size, T values) : size(size), values(values) {
+    Solution(T size, std::vector<T> values) : size(size), values(values) {
         this->integer_variables_num = countIntegers(values);
     }
 
-    uint64_t countIntegers(const T &result) {
+    uint64_t countIntegers(const std::vector<T> &result) {
         uint64_t count = 0;
         for (const double &element: result) {
             if (isNumberInteger(element) || isNumberCloseToInteger(element)) {
@@ -61,10 +63,17 @@ public:
     }
 };
 
-typedef Solution<std::vector<double>> FloatSolution;
-typedef Solution<std::bitset<1024>> IntegerBitSolution;
-typedef Solution<std::vector<uint64_t>> IntegerSolution;
-typedef std::pair<uint64_t, uint64_t> BranchingWays;
+typedef Solution<double> FloatSolution;
+typedef Solution<uint64_t> IntegerSolution;
+
+class PrimalAndDualSolutions {
+public:
+    FloatSolution direct;
+
+    FloatSolution dual;
+
+    PrimalAndDualSolutions &operator=(const PrimalAndDualSolutions &other) = default;
+};
 
 class Timer {
 public:
