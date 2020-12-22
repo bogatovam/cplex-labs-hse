@@ -1,16 +1,8 @@
 #include "include/main_cplex_model.h"
 
 bool MainCplexModel::addColoringAsVariable(const Column &coloring) {
-    return addColoringAsVariable(asSet(coloring, vertex_count));
-}
-
-bool MainCplexModel::addColoringAsVariable(const std::vector<uint64_t> &coloring) {
-    return addColoringAsVariable(asSet(coloring));
-}
-
-bool MainCplexModel::addColoringAsVariable(const std::set<uint64_t> &coloring_as_set_of_vertices) {
     for (const auto &existing_variable: variable_index_to_independent_set) {
-        if (existing_variable == coloring_as_set_of_vertices) {
+        if (existing_variable == coloring) {
             return true;
         }
     }
@@ -18,11 +10,12 @@ bool MainCplexModel::addColoringAsVariable(const std::set<uint64_t> &coloring_as
     std::size_t next_variable_index = model.getVariablesCount();
     model.addVariable(next_variable_index);
     variable_index_to_branching_constraint.push_back(IloConstraint());
-    variable_index_to_independent_set.push_back(coloring_as_set_of_vertices);
+    variable_index_to_independent_set.push_back(coloring);
 
-    for (const uint64_t vertex_in_coloring: coloring_as_set_of_vertices) {
-        constraints[vertex_in_coloring].emplace(next_variable_index);
-        switchToNewConstraint(vertex_in_coloring);
+    for (std::size_t i = 0; i < vertex_count; ++i) {
+        if (!coloring[i]) continue;
+        constraints[i].emplace(next_variable_index);
+        switchToNewConstraint(i);
     }
 
     return false;
@@ -49,20 +42,18 @@ void MainCplexModel::removeBranchingRestrictionsFromVariable(std::size_t variabl
     model.deleteConstraint(variable_index_to_branching_constraint[variable]);
 }
 
-MainCplexModel::MainCplexModel(
-        const IndependentSets &initial_colorings, std::size_t
-vertex_count) :
+MainCplexModel::MainCplexModel(const IndependentSets &initial_colorings, std::size_t vertex_count) :
         model(initial_colorings.size(), IloNumVar::Float, IloObjective::Minimize),
         vertex_count(vertex_count) {
     variable_index_to_independent_set.reserve(initial_colorings.size() * 10);
-
     variable_index_to_independent_set.resize(initial_colorings.size());
+
     variable_index_to_branching_constraint.resize(initial_colorings.size());
 
     std::size_t i = 0;
     constraints = std::vector<std::set<uint64_t>>(vertex_count, std::set<uint64_t>());
     for (const auto &coloring: initial_colorings) {
-        variable_index_to_independent_set[i++] = asSet(coloring, vertex_count);
+        variable_index_to_independent_set[i++] = coloring;
         for (std::size_t v = 0; v < vertex_count; ++v) {
             if (!coloring[v]) continue;
             constraints[v].emplace(i);
@@ -104,6 +95,6 @@ MainFloatSolution MainCplexModel::solveFloatProblem() {
             {dual_obj_value,   dual_variables}};
 }
 
-std::set<uint64_t> MainCplexModel::getIndependentSetAssociatedWithVariableIndex(size_t variable_index) {
+Bitset MainCplexModel::getIndependentSetAssociatedWithVariableIndex(size_t variable_index) {
     return variable_index_to_independent_set[variable_index];
 }

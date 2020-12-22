@@ -169,12 +169,12 @@ bool vertex_coloring_solver::ExecutionContext::generateColumnsByCplex(MainCplexM
     while (true) {
         slave_cplex_model.updateObjectiveFunction(current_solution.dual.values);
         IntegerSolution slave_solution = slave_cplex_model.getIntegerSolution();
-        double lowerBound = roundUpWithEpsilon(current_solution.dual.size / slave_solution.size);
+        double lowerBound = roundUpWithEpsilon(current_solution.dual.size / slave_solution.upper_bound);
 
         if (lowerBound >= optimal_solution.size) {
             return true;
         }
-        if (slave_solution.size <= 1) {
+        if (slave_solution.upper_bound <= 1) {
             return false;
         }
         bool isVariableExists = main_cplex_model.addColoringAsVariable(slave_solution.values);
@@ -220,8 +220,7 @@ double vertex_coloring_solver::ExecutionContext::calculateWeight(const Column &i
                                                                  const std::vector<double> &weights) {
     double result = 0.0;
     for (std::size_t i = 0; i < graph.n_; ++i) {
-        if (!independent_set[i]) continue;
-        result += weights[i];
+        result += weights[i] * independent_set[i];
     }
     return result;
 }

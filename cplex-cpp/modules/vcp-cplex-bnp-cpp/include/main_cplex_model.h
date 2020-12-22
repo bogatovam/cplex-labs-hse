@@ -15,7 +15,7 @@ private:
 
     std::vector<IloConstraint> variable_index_to_branching_constraint;
 
-    std::vector<std::set<uint64_t>> variable_index_to_independent_set;
+    std::vector<Bitset> variable_index_to_independent_set;
 
     CplexModel model;
 
@@ -24,10 +24,8 @@ private:
 public:
     MainCplexModel(const IndependentSets &initial_colorings, std::size_t vertex_count);
 
-    // возвращают флаг, существует ли переменная в модели
+    // возвращают истину, существует ли переменная в модели
     bool addColoringAsVariable(const Column &coloring);
-
-    bool addColoringAsVariable(const std::vector<uint64_t> &coloring);
 
     MainFloatSolution solveFloatProblem();
 
@@ -39,5 +37,5 @@ public:
 
     void switchToNewConstraint(size_t variable_index);
 
-    std::set<uint64_t> getIndependentSetAssociatedWithVariableIndex(size_t variable_index);
+    Bitset getIndependentSetAssociatedWithVariableIndex(size_t variable_index);
 };

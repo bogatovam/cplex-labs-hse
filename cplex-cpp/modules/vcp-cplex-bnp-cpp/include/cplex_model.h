@@ -44,8 +44,12 @@ public:
                                            double upper_bound = 1);
 
     IloConstraint addRangeConstraint(const std::set<uint64_t> &constraint,
-                                           double lower_bound = 0,
-                                           double upper_bound = 1);
+                                     double lower_bound = 0,
+                                     double upper_bound = 1);
+
+    IloConstraint addRangeConstraint(const Bitset &constraint,
+                                     double lower_bound = 0,
+                                     double upper_bound = 1);
 
     void reduceModel(std::size_t limit = 5000);
 
@@ -89,4 +93,6 @@ public:
     void setCplexTimeLimitInSeconds(std::size_t seconds = 5);
 
     void updateObjectiveFunction(const std::vector<double> &new_coefficients);
+
+    IloRange buildConstraint(const Bitset &constraint, const double lower_bound, const double upper_bound);
 };

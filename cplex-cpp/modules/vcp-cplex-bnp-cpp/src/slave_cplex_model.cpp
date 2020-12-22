@@ -11,6 +11,7 @@ std::set<std::set<uint64_t>> SlaveCplexModel::buildCliquesConstraints(const Grap
             auto improved = LocalSearchLauncher::independentSetLocalSearch(bit_independent_set, complement_graph);
             std::cout << " IS ILS: " << bit_independent_set.count() << "->" << improved.first << std::endl;
 
+            // todo можно избавиться от перехода к обычному сету
             std::set<uint64_t> clique;
             for (uint64_t i = 0; i < complement_graph.n_; ++i) {
                 if (!improved.second[i]) continue;
@@ -52,8 +53,8 @@ void SlaveCplexModel::updateObjectiveFunction(const std::vector<double> &new_coe
     model.updateObjectiveFunction(new_coefficients);
 }
 
-IloConstraint SlaveCplexModel::addForbiddenSet(const std::set<uint64_t> &set_vertices) {
-    return model.addRangeConstraint(set_vertices, 0, (double) set_vertices.size() - 1);
+IloConstraint SlaveCplexModel::addForbiddenSet(const Bitset &set_vertices) {
+    return model.addRangeConstraint(set_vertices, 0, (double) set_vertices.count() - 1);
 }
 
 void SlaveCplexModel::removeForbiddenSet(const IloConstraint &constraint) {
@@ -72,10 +73,9 @@ IntegerSolution SlaveCplexModel::getIntegerSolution() {
     IloCplex solver = model.getCplexSolver();
 
     bool isSolved = solver.solve();
-    uint64_t variables_count = model.getVariablesCount();
 
-    uint64_t upper_bound = 0;
-    std::vector<uint64_t> solver_variables(variables_count, 0);
+    double upper_bound = DBL_MAX;
+    Bitset solver_variables;
 
     if (!isSolved) {
         std::cout << "It is impossible to solve slave CPLEX model'" << std::endl;
@@ -85,7 +85,7 @@ IntegerSolution SlaveCplexModel::getIntegerSolution() {
     upper_bound = solver.getBestObjValue();
     auto variables = model.getVariables();
     for (uint64_t i = 0; i < variables.size(); ++i) {
-        solver_variables[i] = solver.getValue(variables[i]);
+        solver_variables.set(i, solver.getValue(variables[i]) == 1.0);
     }
 
     return {upper_bound, solver_variables};

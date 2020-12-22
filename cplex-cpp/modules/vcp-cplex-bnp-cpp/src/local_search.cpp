@@ -80,8 +80,7 @@ std::vector<double> WISLocalSearchExecutionContext::calculateWeightsDiff() {
     for (std::size_t i = 0; i < graph.n_; ++i) {
         Bitset neighbor_in_independent_set = graph.confusion_matrix_bit_set_[i] & current_solution;
         for (std::size_t j = 0; j < graph.n_; ++j) {
-            if (!neighbor_in_independent_set[j]) continue;
-            result[i] -= weights[j];
+            result[i] -= weights[j] * neighbor_in_independent_set[j];
         }
     }
     return result;

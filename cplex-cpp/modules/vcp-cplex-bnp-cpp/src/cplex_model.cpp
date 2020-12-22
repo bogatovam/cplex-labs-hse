@@ -44,6 +44,22 @@ IloRange CplexModel::buildConstraint(const std::set<uint64_t> &constraint,
     return {env, IloNum(lower_bound), expr, IloNum(upper_bound), names_stream.str().c_str()};
 }
 
+IloRange CplexModel::buildConstraint(const Bitset &constraint,
+                                     const double lower_bound,
+                                     const double upper_bound) {
+    /*  Let's clean name & expr first  */
+    names_stream.str(std::string());
+    expr.clear();
+
+    for (std::size_t i = 0; i < variables.size(); ++i) {
+        if (!constraint[i]) continue;
+        names_stream << i << "_";
+        expr += variables[i];
+    }
+
+    return {env, IloNum(lower_bound), expr, IloNum(upper_bound), names_stream.str().c_str()};
+}
+
 IloConstraint CplexModel::buildGreaterThanOrEqualToConstraint(const std::set<uint64_t> &constraint_set,
                                                               const double greater_than_or_equal_to) {
     /*  Let's clean name & expr first  */
@@ -213,6 +229,15 @@ void CplexModel::setCplexTimeLimitInSeconds(std::size_t seconds) {
 }
 
 IloConstraint CplexModel::addRangeConstraint(const std::set<uint64_t> &constraint,
+                                             double lower_bound,
+                                             double upper_bound) {
+    IloConstraint current_constraint = buildConstraint(constraint, lower_bound, upper_bound);
+    all_constraints[current_constraint.getName()] = current_constraint;
+    cplex.getModel().add(current_constraint);
+    return current_constraint;
+}
+
+IloConstraint CplexModel::addRangeConstraint(const Bitset &constraint,
                                              double lower_bound,
                                              double upper_bound) {
     IloConstraint current_constraint = buildConstraint(constraint, lower_bound, upper_bound);

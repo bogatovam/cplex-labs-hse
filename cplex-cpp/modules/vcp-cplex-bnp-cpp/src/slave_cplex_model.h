@@ -17,7 +17,7 @@ public:
 
     void updateObjectiveFunction(const std::vector<double> &new_coefficients);
 
-    IloConstraint addForbiddenSet(const std::set<uint64_t> &set_vertices);
+    IloConstraint addForbiddenSet(const Bitset &set_vertices);
 
     IntegerSolution getIntegerSolution();
 

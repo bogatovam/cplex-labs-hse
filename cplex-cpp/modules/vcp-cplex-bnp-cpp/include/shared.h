@@ -19,34 +19,28 @@ Bitset asBitset(const std::set<uint64_t> &set);
 
 std::set<uint64_t> asSet(const Bitset &set, std::size_t n);
 
-std::set<uint64_t> asSet(const std::vector<uint64_t>& vector);
+std::set<uint64_t> asSet(const std::vector<uint64_t> &vector);
 
 bool isNumberInteger(double number);
 
 bool isNumberCloseToInteger(double number, double eps = 0.00001);
 
-template<class T>
-class Solution {
+class FloatSolution {
 public:
 
-    T size;
+    double size;
 
-    std::vector<T> values;
+    std::vector<double> values;
 
     uint64_t integer_variables_num = 0;
 
-    Solution &operator=(const Solution &other) {
-        this->size = std::move(other.size);
-        this->values = std::move(other.values);
-        this->integer_variables_num = std::move(other.integer_variables_num);
-        return *this;
-    }
+    FloatSolution &operator=(const FloatSolution &other) = default;
 
-    Solution(T size, std::vector<T> values) : size(size), values(values) {
+    FloatSolution(double size, const std::vector<double> &values) : size(size), values(values) {
         this->integer_variables_num = countIntegers(values);
     }
 
-    uint64_t countIntegers(const std::vector<T> &result) {
+    static uint64_t countIntegers(const std::vector<double> &result) {
         uint64_t count = 0;
         for (const double &element: result) {
             if (isNumberInteger(element) || isNumberCloseToInteger(element)) {
@@ -57,19 +51,37 @@ public:
     }
 
     std::set<uint64_t> extractResult() const {
-        std::set<uint64_t> clique;
+        std::set<uint64_t> result;
         for (std::size_t i = 0; i < values.size(); ++i) {
             if (values[i] == 1.0) {
-                clique.insert(i);
+                result.insert(i);
             }
         }
-        return clique;
+        return result;
     }
 };
 
-typedef Solution<double> FloatSolution;
+class IntegerSolution {
+public:
 
-typedef Solution<uint64_t> IntegerSolution;
+    double upper_bound;
+
+    Bitset values;
+
+    IntegerSolution &operator=(const IntegerSolution &other) = default;
+
+    IntegerSolution(double upper_bound, const Bitset &values) : upper_bound(upper_bound), values(values) {}
+
+    std::set<uint64_t> extractResult() const {
+        std::set<uint64_t> result;
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            if (values[i]) {
+                result.insert(i);
+            }
+        }
+        return result;
+    }
+};
 
 class MainFloatSolution {
 public:
