@@ -11,6 +11,8 @@
 #include <atomic>
 #include <iostream>
 
+#define CHECK_SOLUTION
+
 typedef std::bitset<1024> Bitset;
 
 Bitset asBitset(const std::set<uint64_t> &set);

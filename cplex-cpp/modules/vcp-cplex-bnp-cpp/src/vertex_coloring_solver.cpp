@@ -7,7 +7,6 @@
 
 std::map<std::string, std::string> vertex_coloring_solver::solve(const Graph &graph) {
     std::map<std::string, std::string> log;
-    std::map<NodesOrderingStrategy, std::vector<uint64_t>> coloring_by_strategy;
 
     steady_clock::time_point begin = steady_clock::now();
     IndependentSets heuristic = solveByHeuristic(graph);
@@ -102,9 +101,13 @@ void vertex_coloring_solver::ExecutionContext::branchAndPrice(MainCplexModel &ma
             return;
         }
     }
+    // TODO возможно понадобится проверка на
     if (current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
         if (!is_need_to_solve_exactly) {
             bool just_to_test = generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution);
+            if (just_to_test) {
+                std::cout << "WTF Why it happened!?!?!?!\n";
+            }
             if (current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
                 std::cout << "Found better integer solution:=(" << current_solution.primal.size << ")\n";
                 this->optimal_solution = current_solution.primal;
@@ -143,7 +146,7 @@ bool vertex_coloring_solver::ExecutionContext::generateColumnsByHeuristic(MainCp
     while (true) {
         WeightWithColumn column_to_add = findColumnToAddToModel(current_solution.dual);
         if (column_to_add.first < 1) {
-            return false;
+            return true;
         }
         bool isVariableExists = main_cplex_model.addColoringAsVariable(column_to_add.second);
         if (isVariableExists) {
@@ -189,16 +192,18 @@ bool vertex_coloring_solver::ExecutionContext::generateColumnsByCplex(MainCplexM
 
 //find The Mos tWeighty Violated Constraint in dual problem
 WeightWithColumn vertex_coloring_solver::ExecutionContext::findColumnToAddToModel(const FloatSolution &solution) {
-    auto coloring_independent_sets = graph.findWeightedIndependentSet(solution.values);
+    // TODO проверить, как повлияет если инициализировать одной вершиной
+    auto coloring_independent_sets = graph.getWeightedIndependentSet(solution.values);
     if (coloring_independent_sets.empty()) {
         return {0, {}};
     }
-    std::pair<double, std::set<uint64_t>> best_candidate = *coloring_independent_sets.rbegin();
-    WeightWithColumn improved = LocalSearchLauncher::localSearch(asBitset(best_candidate.second), graph,
+    WeightToVertices best_candidate = *coloring_independent_sets.rbegin();
+    // TODO check local search performance
+    WeightWithColumn improved = LocalSearchLauncher::localSearch(best_candidate.second, graph,
                                                                  solution.values);
     std::pair<bool, Column> result = graph.supplementSetsToMaximumForInclusion(improved.second);
 #ifdef CHECK_SOLUTION
-    auto tmp = asSet(result, graph.n_);
+    auto tmp = asSet(result.second, graph.n_);
     if (!graph.isVerticesIndependent(tmp)) {
         std::cout << "set is not independent" << std::endl;
         throw std::runtime_error("set is not independent");

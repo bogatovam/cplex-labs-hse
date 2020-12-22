@@ -2,10 +2,11 @@
 #include "slave_cplex_model.h"
 
 std::set<std::set<uint64_t>> SlaveCplexModel::buildCliquesConstraints(const Graph &graph) const {
-    Graph complement_graph = graph.buildComplementGraph();
     std::set<std::set<uint64_t>> result;
+
+    Graph complement_graph = graph.buildComplementGraph();
     for (auto coloring_strategy: nodes_ordering_strategies) {
-        IndependentSets current_independent_sets = graph.getIndependentSetByColoring(coloring_strategy);
+        IndependentSets current_independent_sets = complement_graph.getIndependentSetByColoring(coloring_strategy);
         for (const auto &bit_independent_set: current_independent_sets) {
             auto improved = LocalSearchLauncher::independentSetLocalSearch(bit_independent_set, complement_graph);
             std::cout << " IS ILS: " << bit_independent_set.count() << "->" << improved.first << std::endl;
@@ -73,19 +74,19 @@ IntegerSolution SlaveCplexModel::getIntegerSolution() {
     bool isSolved = solver.solve();
     uint64_t variables_count = model.getVariablesCount();
 
-    uint64_t obj_value = 0;
+    uint64_t upper_bound = 0;
     std::vector<uint64_t> solver_variables(variables_count, 0);
 
     if (!isSolved) {
-        std::cout << "It is impossible to solve CPLEX model'" << std::endl;
-        return {obj_value, solver_variables};
+        std::cout << "It is impossible to solve slave CPLEX model'" << std::endl;
+        return {upper_bound, solver_variables};
     }
 
-    obj_value = solver.getObjValue();
+    upper_bound = solver.getBestObjValue();
     auto variables = model.getVariables();
     for (uint64_t i = 0; i < variables.size(); ++i) {
         solver_variables[i] = solver.getValue(variables[i]);
     }
 
-    return {obj_value, solver_variables};
+    return {upper_bound, solver_variables};
 }

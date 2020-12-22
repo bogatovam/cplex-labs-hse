@@ -47,10 +47,6 @@ namespace vertex_coloring_solver {
 
         const Graph &graph;
 
-        const double lower_bound = 0.0;
-
-        const double upper_bound = 1.0;
-
         static double roundUpWithEpsilon(double objective_function_value, double eps = 0.00001);
 
         static uint64_t branchingFindNearestToInteger(const FloatSolution &solution);
@@ -75,6 +71,4 @@ namespace vertex_coloring_solver {
     std::map<std::string, std::string> solve(const Graph &graph);
 
     IndependentSets solveByHeuristic(const Graph &graph);
-
-
 }
