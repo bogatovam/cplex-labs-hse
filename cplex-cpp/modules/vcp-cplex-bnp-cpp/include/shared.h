@@ -81,6 +81,16 @@ public:
         }
         return result;
     }
+
+    void print() {
+        std::cout << "Slave solution\t(" << upper_bound << "):\t";
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            if (values[i]) {
+                std::cout << i << ",\t";
+            }
+        }
+        std::cout << std::endl;
+    }
 };
 
 class MainFloatSolution {
@@ -90,6 +100,8 @@ public:
     FloatSolution dual;
 
     MainFloatSolution &operator=(const MainFloatSolution &other) = default;
+
+    void print();
 };
 
 class Timer {

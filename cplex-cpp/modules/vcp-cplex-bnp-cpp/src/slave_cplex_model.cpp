@@ -1,30 +1,40 @@
 #include <include/local_search.h>
-#include "slave_cplex_model.h"
+#include "include/slave_cplex_model.h"
 
-std::set<std::set<uint64_t>> SlaveCplexModel::buildCliquesConstraints(const Graph &graph) const {
+std::set<std::set<uint64_t>> SlaveCplexModel::buildCliquesConstraints(const Graph &graph) {
     std::set<std::set<uint64_t>> result;
 
     Graph complement_graph = graph.buildComplementGraph();
     for (auto coloring_strategy: nodes_ordering_strategies) {
         IndependentSets current_independent_sets = complement_graph.getIndependentSetByColoring(coloring_strategy);
         for (const auto &bit_independent_set: current_independent_sets) {
-            auto improved = LocalSearchLauncher::independentSetLocalSearch(bit_independent_set, complement_graph);
-            std::cout << " IS ILS: " << bit_independent_set.count() << "->" << improved.first << std::endl;
 
-            // todo можно избавиться от перехода к обычному сету
+            auto improved = LocalSearchLauncher::independentSetLocalSearch(bit_independent_set, complement_graph);
+            if (improved.second.count() > bit_independent_set.count()) {
+                std::cout << "IS was improved by ILS: ( " << bit_independent_set.count() << ") ->" << "( "
+                          << improved.second.count() << ")" << std::endl;
+            }
             std::set<uint64_t> clique;
             for (uint64_t i = 0; i < complement_graph.n_; ++i) {
                 if (!improved.second[i]) continue;
                 clique.insert(i);
             }
-            result.insert(clique);
+#ifdef CHECK_SOLUTION
+            if (!graph.isClique(improved.second)) {
+                std::cout << "this is not clique" << std::endl;
+                throw std::runtime_error("this is not clique");
+            }
+#endif
+            if (clique.size() > 2) {
+                result.insert(clique);
+            }
         }
     }
     std::cout << "Cliques count: " << result.size() << std::endl;
     return result;
 }
 
-std::set<std::set<uint64_t>> SlaveCplexModel::buildAdjacencyConstraints(const Graph &graph) const {
+std::set<std::set<uint64_t>> SlaveCplexModel::buildAdjacencyConstraints(const Graph &graph) {
     std::set<std::set<uint64_t>> result;
     for (std::size_t v = 0; v < graph.n_; ++v) {
         for (std::size_t u = v + 1; u < graph.n_; ++u) {
@@ -50,30 +60,40 @@ SlaveCplexModel::SlaveCplexModel(const Graph &graph) :
 }
 
 void SlaveCplexModel::updateObjectiveFunction(const std::vector<double> &new_coefficients) {
+    std::cout << "\nSlave model will be updated with the next coefficient:\t";
+    uint64_t i = 0;
+    for (auto h: new_coefficients) {
+        std::cout << "x[" << i << "]=" << h << " ";
+        i++;
+    }
+    std::cout << std::endl;
     model.updateObjectiveFunction(new_coefficients);
 }
 
 IloConstraint SlaveCplexModel::addForbiddenSet(const Bitset &set_vertices) {
+    std::cout << "\nAdd constraint (forbidden set) to slave model:\t";
+    for (std::size_t i = 0; i < vertex_count; ++i) {
+        if (!set_vertices[i]) continue;
+        std::cout << "x[" << i << "]\t";
+    }
+    std::cout << std::endl;
     return model.addRangeConstraint(set_vertices, 0, (double) set_vertices.count() - 1);
 }
 
 void SlaveCplexModel::removeForbiddenSet(const IloConstraint &constraint) {
+    std::cout << "\nRemove constraint (forbidden set) to slave model:\t" << constraint.getName() << "" << std::endl;
     model.deleteConstraint(constraint);
 }
 
-void SlaveCplexModel::setTimeout(std::size_t seconds) {
-    model.setCplexTimeLimitInSeconds(seconds);
-}
+IntegerSolution SlaveCplexModel::getIntegerSolution(bool exact) {
+    IloCplex solver = model.getCplexSolver(exact);
+    std::cout << "\nSolving slave model:\t objective:=\t";
 
-void SlaveCplexModel::turnOffTimeout() {
-    model.setCplexTimeLimitInSeconds(INT_MAX);
-}
-
-IntegerSolution SlaveCplexModel::getIntegerSolution() {
-    IloCplex solver = model.getCplexSolver();
-
+    for (auto it = solver.getObjective().getLinearIterator(); it.ok(); ++it) {
+        std::cout << it.getCoef() << " * " << it.getVar().getName() << " + ";
+    }
+    std::cout << " -> min" << std::endl;
     bool isSolved = solver.solve();
-
     double upper_bound = DBL_MAX;
     Bitset solver_variables;
 
@@ -88,5 +108,12 @@ IntegerSolution SlaveCplexModel::getIntegerSolution() {
         solver_variables.set(i, solver.getValue(variables[i]) == 1.0);
     }
 
+    std::cout << "\nGot integer solution from slave model:\tupper_bound:=" << upper_bound << "\tobjective value:="
+              << solver.getObjValue() << "\tvalues:=";
+    for (std::size_t i = 0; i < vertex_count; ++i) {
+        if (!solver_variables[i]) continue;
+        std::cout << "x[" << i << "]\t";
+    }
+    std::cout << std::endl;
     return {upper_bound, solver_variables};
 }

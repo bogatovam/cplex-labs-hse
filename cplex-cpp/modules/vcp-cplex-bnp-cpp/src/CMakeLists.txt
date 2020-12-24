@@ -15,7 +15,10 @@ add_executable(${PROJECT_NAME}
         ../include/local_search.h
         ../include/cql_graph.h
         ../include/cplex_model.h
-        ../include/constants.h main_cplex_model.cpp ../include/main_cplex_model.h slave_cplex_model.cpp slave_cplex_model.h)
+        ../include/constants.h main_cplex_model.cpp
+        ../include/main_cplex_model.h
+        slave_cplex_model.cpp
+        ../include/slave_cplex_model.h)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${CPLEX_INCLUDE_DIRS})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${CPLEX_LIBRARIES})

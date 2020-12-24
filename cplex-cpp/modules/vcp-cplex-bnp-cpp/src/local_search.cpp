@@ -101,6 +101,14 @@ std::vector<uint64_t> LocalSearchExecutionContext::calculateTightness(Bitset pos
 
 
 void WISLocalSearchExecutionContext::localSearch() {
+
+    uint64_t w1_swap = getNextW1SwapCandidate();
+    while (w1_swap != UINT64_MAX) {
+        // delete neighbors and add new vertex
+        updateSet(graph.confusion_matrix_bit_set_[w1_swap], w1_swap);
+        w1_swap = getNextW1SwapCandidate();
+    }
+
     std::map<uint64_t, Bitset> candidates_1_2_swap = build12SwapCandidatesSet(current_solution,
                                                                               tightness);
     for (auto it = candidates_1_2_swap.begin(); it != candidates_1_2_swap.end();) {
@@ -121,26 +129,6 @@ void WISLocalSearchExecutionContext::localSearch() {
         // из кандидатов нужно удалить соседей тех вершин, которые мы вставили
         candidates_1_2_swap = build12SwapCandidatesSet(current_solution, tightness);
         it = candidates_1_2_swap.begin();
-    }
-    auto set_function = [&](uint64_t i, uint64_t j) {
-        return (weights_diff[i] > weights_diff[j]) || (weights_diff[i] == weights_diff[j] && i < j);
-    };
-
-    std::set<uint64_t, decltype(set_function)> w1_swap_candidates(set_function);
-
-    for (std::size_t v = 0; v < graph.n_; ++v) {
-        if (current_solution[v] || weights_diff[v] <= 0) continue;
-        w1_swap_candidates.insert(v);
-    }
-    Bitset deleted_neighbors;
-
-    for (auto v: w1_swap_candidates) {
-        deleted_neighbors &= graph.confusion_matrix_bit_set_[v];
-        if ((deleted_neighbors & graph.confusion_matrix_bit_set_[v]).count() != 0) {
-            continue;
-        }
-        updateSet(graph.confusion_matrix_bit_set_[v], v);
-        deleted_neighbors |= graph.confusion_matrix_bit_set_[v];
     }
 }
 
@@ -214,6 +202,22 @@ std::map<uint64_t, Bitset> WISLocalSearchExecutionContext::build12SwapCandidates
     }
 
     return candidates_per_vertex;
+}
+
+uint64_t WISLocalSearchExecutionContext::getNextW1SwapCandidate() const {
+    // (w, 1) swap - добаляем одну вершину и удаляем ее соседей
+    // (только в том случае, если ее вес больше, чем вес всех ее соседей)
+    uint64_t vertex_with_max_weights_diff = 0;
+    bool isFound = false;
+    for (std::size_t v = 0; v < graph.n_; ++v) {
+        // рассматриваем только вершин не из решения и которые при добавлении не уменьшат вес решения
+        if (current_solution[v] || std::round(weights_diff[v]) <= 0) continue;
+        isFound = true;
+        vertex_with_max_weights_diff =
+                weights_diff[v] > vertex_with_max_weights_diff ? v
+                                                               : vertex_with_max_weights_diff;
+    }
+    return isFound ? vertex_with_max_weights_diff : UINT64_MAX;
 }
 
 void WISLocalSearchExecutionContext::updateSetAndCandidates(uint64_t deleted, std::pair<uint64_t, uint64_t> inserted,
@@ -297,7 +301,7 @@ std::pair<double, Bitset> LocalSearchLauncher::localSearch(Bitset initial_soluti
     uint64_t non_changed_iteration = 0;
 
     WISLocalSearchExecutionContext local_solution = current_solution;
-    for (std::size_t iteration = 0; iteration < 100; ++iteration) {
+    for (std::size_t iteration = 0; iteration < 10; ++iteration) {
         local_solution.perturb();
         local_solution.localSearch();
         //  acceptance
@@ -503,13 +507,13 @@ void CliqueLocalSearchExecutionContext::localSearch() {
 #endif
 }
 
-std::pair<double, Bitset> LocalSearchLauncher::independentSetLocalSearch(Bitset initial_solution,
-                                                                         const Graph &graph) {
+std::pair<uint64_t, Bitset> LocalSearchLauncher::independentSetLocalSearch(Bitset initial_solution,
+                                                                           const Graph &graph) {
     ISLocalSearchExecutionContext current_solution(initial_solution, graph);
     current_solution.localSearch();
 
     Bitset best_solution = current_solution.current_solution;
-    double best_size = current_solution.current_solution_size;
+    uint64_t best_size = current_solution.current_solution_size;
     uint64_t non_changed_iteration = 0;
 
     ISLocalSearchExecutionContext local_solution = current_solution;
@@ -517,8 +521,8 @@ std::pair<double, Bitset> LocalSearchLauncher::independentSetLocalSearch(Bitset 
         local_solution.perturb();
         local_solution.localSearch();
         //  acceptance
-        double updated = local_solution.current_solution_size;
-        double current = current_solution.current_solution_size;
+        uint64_t updated = local_solution.current_solution_size;
+        uint64_t current = current_solution.current_solution_size;
         if (updated > current || non_changed_iteration > current_solution.current_solution_size) {
             current_solution = local_solution;
             if (updated > best_size) {

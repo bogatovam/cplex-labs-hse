@@ -76,8 +76,8 @@ Graph Graph::readGraph(const std::string &graphs_path, const std::string &graph_
     return Graph(n, m, adjacency_lists, confusion_matrix_bit_set);
 }
 
-IndependentSets Graph::colorWeightedGraph(const std::vector<double> &wights) const {
-    std::vector<uint64_t> ordered_vertices = orderVerticesSaturationSmallestFirstWeighted(wights);
+IndependentSets Graph::colorWeightedGraph(const std::vector<double> &weights) const {
+    std::vector<uint64_t> ordered_vertices = orderVerticesSaturationSmallestFirstWeighted(weights);
 
     std::map<uint64_t, Column> color_to_vertex_bitset;
     std::vector<uint64_t> colored_vertices(n_, UINT64_MAX);
@@ -106,7 +106,7 @@ IndependentSets Graph::colorWeightedGraph(const std::vector<double> &wights) con
 #endif
     IndependentSets sets;
     for (auto const &color: color_to_vertex_bitset) {
-        sets.emplace(supplementSetsToMaximumForInclusion(color.second).second);
+        sets.emplace_back(supplementSetsToMaximumForInclusion(color.second).second);
     }
     return sets;
 }
@@ -142,13 +142,13 @@ IndependentSets Graph::getIndependentSetByColoring(const NodesOrderingStrategy &
 #endif
     IndependentSets sets;
     for (auto const &color: color_to_vertex_bitset) {
-        sets.emplace(supplementSetsToMaximumForInclusion(color.second).second);
+        sets.emplace_back(supplementSetsToMaximumForInclusion(color.second).second);
     }
     return sets;
 }
 
-std::set<WeightToVertices> Graph::getWeightedIndependentSet(const std::vector<double> &weights) const {
-    std::set<WeightToVertices> result;
+std::vector<WeightToVertices> Graph::getWeightedIndependentSet(const std::vector<double> &weights) const {
+    std::vector<WeightToVertices> result;
     IndependentSets independent_sets_by_coloring = colorWeightedGraph(weights);
     for (const auto &independent_set: independent_sets_by_coloring) {
         double weight = 0.0;
@@ -156,9 +156,10 @@ std::set<WeightToVertices> Graph::getWeightedIndependentSet(const std::vector<do
             weight += weights[i] * independent_set[i];
         }
         if (weight > 1.0) {
-            result.emplace(std::make_pair(weight, independent_set));
+            result.emplace_back(std::make_pair(weight, independent_set));
         }
     }
+    std::sort(result.begin(), result.end(), [](WeightToVertices a, WeightToVertices b) { return a.first > b.first; });
     return result;
 }
 
@@ -335,19 +336,25 @@ std::vector<uint64_t> Graph::orderVerticesSaturationSmallestFirstWeighted(const 
 
 std::pair<bool, Column> Graph::supplementSetsToMaximumForInclusion(const Column &independent_set) const {
     Column supplemented = independent_set;
-    Column candidates = independent_set;
-    for (std::size_t i = 0; i < n_; ++i) {
-        if (!independent_set[i]) continue;
-        candidates |= confusion_matrix_bit_set_[i];
-    }
-    candidates = ~candidates;
+    bool hasImprovements;
+    while (true) {
+        hasImprovements = false;
+        Column candidates = supplemented;
 
-    bool hasImprovements = false;
-    for (std::size_t v = 0; v < n_; ++v) {
-        if (candidates[v]) {
-            hasImprovements = true;
-            supplemented.set(v, true);
+        for (std::size_t i = 0; i < n_; ++i) {
+            if (!supplemented[i]) continue;
+            candidates |= confusion_matrix_bit_set_[i];
         }
+        candidates = ~candidates;
+
+        for (std::size_t v = 0; v < n_; ++v) {
+            if (candidates[v]) {
+                hasImprovements = true;
+                supplemented.set(v, true);
+                break;
+            }
+        }
+        if (!hasImprovements) break;
     }
 #ifdef CHECK_SOLUTION
     if (!isVerticesIndependent(supplemented)) {
@@ -364,7 +371,7 @@ Graph Graph::buildComplementGraph() const {
 
     for (std::size_t v = 0; v < n_; ++v) {
         matrix_b[v] = ~confusion_matrix_bit_set_[v];
-        for (std::size_t u = n_; u < n_; ++u) {
+        for (std::size_t u = n_; u < matrix_b[v].size(); ++u) {
             matrix_b[v].set(u, false);
         }
         matrix_b[v].set(v, false);
@@ -408,10 +415,10 @@ bool Graph::isColoringCorrect(std::vector<uint64_t> coloring) const {
     return true;
 }
 
-bool Graph::isVerticesIndependent(Column &independent_set) const {
+bool Graph::isVerticesIndependent(const Column &independent_set) const {
     for (std::size_t v = 0; v < n_; ++v) {
         if (!independent_set[v]) continue;
-        for (std::size_t u = 0; v < n_; ++v) {
+        for (std::size_t u = v + 1; u < n_; ++u) {
             if (!independent_set[u]) continue;
             if (u != v && confusion_matrix_bit_set_[v][u]) {
                 std::cout << u << "\t" << v << std::endl;

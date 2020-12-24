@@ -92,6 +92,7 @@ public:
 
     WISLocalSearchExecutionContext &operator=(const WISLocalSearchExecutionContext &other);
 
+//  difference between the weight of v and the total weight of Ns(v)
     std::vector<double> weights_diff;
 
     const std::vector<double> &weights;
@@ -114,6 +115,8 @@ public:
     void perturb(size_t k = 1);
 
     void updateSet(Bitset deleted, uint64_t inserted);
+
+    uint64_t getNextW1SwapCandidate() const;
 };
 
 class LocalSearchLauncher {
@@ -123,6 +126,6 @@ public:
 
     static std::pair<uint64_t, Bitset> localSearch(Bitset initial_solution, const Graph &graph);
 
-    static std::pair<double, Bitset> independentSetLocalSearch(Bitset initial_solution,
-                                                               const Graph &graph);
+    static std::pair<uint64_t, Bitset> independentSetLocalSearch(Bitset initial_solution,
+                                                                 const Graph &graph);
 };

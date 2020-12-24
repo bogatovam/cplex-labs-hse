@@ -8,9 +8,9 @@ private:
 
     std::size_t vertex_count;
 
-    std::set<std::set<uint64_t>> buildCliquesConstraints(const Graph &graph) const;
+    static std::set<std::set<uint64_t>> buildCliquesConstraints(const Graph &graph) ;
 
-    std::set<std::set<uint64_t>> buildAdjacencyConstraints(const Graph &graph) const;
+    static std::set<std::set<uint64_t>> buildAdjacencyConstraints(const Graph &graph) ;
 
 public:
     explicit SlaveCplexModel(const Graph &graph);
@@ -19,11 +19,7 @@ public:
 
     IloConstraint addForbiddenSet(const Bitset &set_vertices);
 
-    IntegerSolution getIntegerSolution();
-
-    void turnOffTimeout();
-
-    void setTimeout(size_t seconds);
+    IntegerSolution getIntegerSolution(bool exact);
 
     void removeForbiddenSet(const IloConstraint &constraint);
 };

@@ -20,7 +20,7 @@ typedef Bitset Column;
 
 typedef std::pair<double, Column> WeightWithColumn;
 
-typedef std::set<Column> IndependentSets;
+typedef std::vector<Column> IndependentSets;
 
 typedef std::pair<double, Bitset> WeightToVertices;
 
@@ -48,11 +48,11 @@ public:
 
     static Graph readGraph(const std::string &graphs_path, const std::string &graph_name);
 
-    IndependentSets colorWeightedGraph(const std::vector<double> &wights) const;
+    IndependentSets colorWeightedGraph(const std::vector<double> &weights) const;
 
     IndependentSets getIndependentSetByColoring(const NodesOrderingStrategy &strategy) const;
 
-    std::set<WeightToVertices> getWeightedIndependentSet(const std::vector<double> &weights) const;
+    std::vector<WeightToVertices> getWeightedIndependentSet(const std::vector<double> &weights) const;
 
     std::pair<bool, Column> supplementSetsToMaximumForInclusion(const Column &independent_set) const;
 
@@ -76,7 +76,7 @@ public:
 
     bool isClique(const Bitset &clique) const;
 
-    bool isVerticesIndependent(Column &independent_set) const;
+    bool isVerticesIndependent(const Column &independent_set) const;
 
     bool isColoringCorrect(std::vector<uint64_t> coloring) const;
 

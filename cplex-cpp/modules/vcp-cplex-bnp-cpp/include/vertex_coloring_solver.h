@@ -2,7 +2,7 @@
 #include "include/cplex_model.h"
 #include "include/cql_graph.h"
 #include <chrono>
-#include <src/slave_cplex_model.h>
+#include <include/slave_cplex_model.h>
 #include "csv_writer.h"
 
 using namespace std::chrono;
@@ -60,12 +60,12 @@ namespace vertex_coloring_solver {
         bool generateColumnsByHeuristic(MainCplexModel &main_cplex_model,
                                         MainFloatSolution &current_solution);
 
-        double calculateWeight(const Column &independent_set, const std::vector<double> &weights);
+        double calculateWeight(const Column &independent_set, const std::vector<double> &weights) const;
 
-        bool isTailingOff(double source_delta, double target_delta = 0.001);
+        static bool isTailingOff(double source_delta, double target_delta = 0.001);
 
         bool generateColumnsByCplex(MainCplexModel &main_cplex_model, SlaveCplexModel &slave_cplex_model,
-                                    MainFloatSolution &current_solution);
+                                    MainFloatSolution &current_solution, bool b) const;
     };
 
     std::map<std::string, std::string> solve(const Graph &graph);

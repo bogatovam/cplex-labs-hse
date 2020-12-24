@@ -3,13 +3,13 @@
 #include <iostream>
 
 static const std::pair<std::string, uint64_t> GRAPHS_NAMES[] = {
-        {"myciel3.col", 4}, // 11,20
-        {"myciel4.col", 5}, // 23,71
+//        {"myciel3.col", 4}, // 11,20
+//        {"myciel4.col", 5}, // 23,71
 //        {"queen5_5.col", 5}, // 25,160
 //        {"queen6_6.col", 7}, // 36,290
 //        {"myciel5.col", 6}, // 47,236
 //        {"queen7_7.col", 7}, // 49,476
-//        {"queen8_8.col", 9}, // 64, 728
+        {"queen8_8.col", 9}, // 64, 728
 //        {"huck.col", 11}, // 74,301
 //        {"jean.col", 10}, // 80,254
 //        {"queen9_9.col", 10}, // 81, 2112
