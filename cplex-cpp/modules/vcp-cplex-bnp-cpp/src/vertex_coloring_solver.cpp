@@ -125,69 +125,53 @@ void vertex_coloring_solver::ExecutionContext::startBranchAndPrice(MainCplexMode
 
 void vertex_coloring_solver::ExecutionContext::branchAndPrice(MainCplexModel &main_cplex_model,
                                                               SlaveCplexModel &slave_cplex_model) {
+    MainFloatSolution current_solution = main_cplex_model.solveFloatProblem();
 
-    std::stack<Branching> stack;
-    stack.emplace(UINT64_MAX, 0, true);
-    while (!stack.empty()) {
-        Branching current_branching = stack.top();
-        stack.pop();
-
-        IloConstraint branching_constraint;
-        if (!current_branching.is_init) {
-            if (current_branching.way == 1) {
-                branching_constraint = main_cplex_model.includeColoringWithVariableIndex(current_branching.variable);
-            }
-        }
-
-        MainFloatSolution current_solution = main_cplex_model.solveFloatProblem();
-
-        std::cout << "\n\n------------------START BRANCH------------------" << std::endl << std::endl;
-        bool is_need_to_solve_exactly = generateColumnsByHeuristic(main_cplex_model, current_solution);
-        if (is_need_to_solve_exactly) {
-            if (generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution, false)) {
-                std::cout << "DISCARD BRANCH: by lower bound" << std::endl;
-                metrics.onFinishBranch();
-                metrics.onDiscardedBranch();
-                return;
-            }
-        }
-        if (current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
-            std::cout << "\n\nINTEGER SOLUTION:=(" << current_solution.primal.size
-                      << "):\tLet's solve slave problem exactly";
-            if (generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution, true)) {
-                return;
-            }
-            if (current_solution.primal.integer_variables_num == current_solution.primal.values.size() &&
-                this->optimal_solution.size > current_solution.primal.size) {
-                std::cout << "BETTER INTEGER SOLUTION:=(" << current_solution.primal.size << ")" << std::endl;
-                this->optimal_solution = current_solution.primal;
-            }
+    std::cout << "\n\n------------------START BRANCH------------------" << std::endl << std::endl;
+    bool is_need_to_solve_exactly = generateColumnsByHeuristic(main_cplex_model, current_solution);
+    if (is_need_to_solve_exactly) {
+        if (generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution, false)) {
+            std::cout << "DISCARD BRANCH: by lower bound" << std::endl;
             metrics.onFinishBranch();
+            metrics.onDiscardedBranch();
             return;
         }
-        std::cout << "\n\nSTART BRANCHING" << std::endl;
-        uint64_t branching_var = branchingFindNearestToInteger(current_solution.primal);
-
-        std::cout << "BRANCHING: found variable:" << branching_var << " with value "
-                  << current_solution.primal.values[branching_var]
-                  << std::endl;
-
-        std::cout << "BRANCHING: start branch with including x[" << branching_var << "]" << std::endl;
-        auto include_constraint = main_cplex_model.includeColoringWithVariableIndex(branching_var);
-        branchAndPrice(main_cplex_model, slave_cplex_model);
-        main_cplex_model.removeConstraint(include_constraint);
-        std::cout << "BRANCHING: finish branch with including x[" << branching_var << "]" << std::endl;
-
-        std::cout << "BRANCHING: start branch with excluding x[" << branching_var << "]" << std::endl;
-        auto exclude_constraint = main_cplex_model.excludeColoringWithVariableIndex(branching_var);
-        auto slave_forbidden_constraint = slave_cplex_model.addForbiddenSet(
-                main_cplex_model.getIndependentSetAssociatedWithVariableIndex(branching_var));
-        branchAndPrice(main_cplex_model, slave_cplex_model);
-        slave_cplex_model.removeForbiddenSet(slave_forbidden_constraint);
-        main_cplex_model.removeConstraint(exclude_constraint);
-        std::cout << "\nBRANCHING: finish branch with excluding x[" << branching_var << "]" << std::endl;
-        metrics.onFinishBranch();
     }
+    if (current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
+        std::cout << "\n\nINTEGER SOLUTION:=(" << current_solution.primal.size
+                  << "):\tLet's solve slave problem exactly";
+        if (generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution, true)) {
+            return;
+        }
+        if (current_solution.primal.integer_variables_num == current_solution.primal.values.size() &&
+            this->optimal_solution.size > current_solution.primal.size) {
+            std::cout << "BETTER INTEGER SOLUTION:=(" << current_solution.primal.size << ")" << std::endl;
+            this->optimal_solution = current_solution.primal;
+        }
+        metrics.onFinishBranch();
+        return;
+    }
+    std::cout << "\n\nSTART BRANCHING" << std::endl;
+    uint64_t branching_var = branchingFindNearestToInteger(current_solution.primal);
+
+    std::cout << "BRANCHING: found variable:" << branching_var << " with value "
+              << current_solution.primal.values[branching_var]
+              << std::endl;
+
+    std::cout << "BRANCHING: start branch with including x[" << branching_var << "]" << std::endl;
+    auto include_constraint = main_cplex_model.includeColoringWithVariableIndex(branching_var);
+    main_cplex_model.removeConstraint(include_constraint);
+    std::cout << "BRANCHING: finish branch with including x[" << branching_var << "]" << std::endl;
+
+    std::cout << "BRANCHING: start branch with excluding x[" << branching_var << "]" << std::endl;
+    auto exclude_constraint = main_cplex_model.excludeColoringWithVariableIndex(branching_var);
+    auto slave_forbidden_constraint = slave_cplex_model.addForbiddenSet(
+            main_cplex_model.getIndependentSetAssociatedWithVariableIndex(branching_var));
+    branchAndPrice(main_cplex_model, slave_cplex_model);
+    slave_cplex_model.removeForbiddenSet(slave_forbidden_constraint);
+    main_cplex_model.removeConstraint(exclude_constraint);
+    std::cout << "\nBRANCHING: finish branch with excluding x[" << branching_var << "]" << std::endl;
+    metrics.onFinishBranch();
 }
 
 
@@ -315,5 +299,3 @@ double vertex_coloring_solver::ExecutionContext::calculateWeight(const Column &i
 bool vertex_coloring_solver::ExecutionContext::isTailingOff(double source_delta, double target_delta) {
     return source_delta < target_delta;
 }
-
-Branching::Branching(uint64_t variable, bool way) : variable(variable), way(way) {}

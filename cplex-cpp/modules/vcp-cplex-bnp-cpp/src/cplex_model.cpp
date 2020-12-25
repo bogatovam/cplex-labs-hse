@@ -21,6 +21,11 @@ CplexModel::CplexModel(std::size_t variables_num, IloNumVar::Type variable_type,
     current_objective_function = IloObjective(env, obj_expr, objective_sense);
     this->objective_sense = objective_sense;
     model.add(current_objective_function);
+
+    cplex = IloCplex(model);
+    cplex.setParam(IloCplex::Param::Threads, 16);
+    cplex.setParam(IloCplex::Param::Parallel, 1);
+    cplex.setOut(env.getNullStream());
 }
 
 IloRange CplexModel::buildConstraint(const std::set<uint64_t> &constraint,
@@ -77,7 +82,7 @@ IloRangeArray CplexModel::addRangeConstraints(const std::set<std::set<uint64_t>>
         all_constraints[current_constraint.getName()] = current_constraint;
         constraints_to_model[constraint_num++] = current_constraint;
     }
-    model.add(constraints_to_model);
+    cplex.getModel().add(constraints_to_model);
     return constraints_to_model;
 }
 
@@ -91,7 +96,7 @@ IloRangeArray CplexModel::addGreaterThanOrEqualToConstraints(const std::vector<s
         all_constraints[current_constraint.getName()] = current_constraint;
         constraints_to_model[constraint_num++] = current_constraint;
     }
-    model.add(constraints_to_model);
+    cplex.getModel().add(constraints_to_model);
     return constraints_to_model;
 }
 
@@ -107,11 +112,11 @@ IloConstraint CplexModel::addEqualityConstraintToVariable(uint64_t variable, dou
 
 void CplexModel::deleteConstraint(const IloConstraint &constraint) {
     all_constraints.erase(constraint.getName());
-    model.remove(constraint);
+    cplex.getModel().remove(constraint);
 }
 
 void CplexModel::addConstraint(const IloConstraint &constraint) {
-    model.add(constraint);
+    cplex.getModel().add(constraint);
     all_constraints[constraint.getName()] = constraint;
 }
 
@@ -152,14 +157,14 @@ void CplexModel::addVariable(size_t index, double lover_bound, double upper_boun
 }
 
 void CplexModel::updateObjectiveFunction(const std::vector<double> &new_coefficients) {
-    model.remove(current_objective_function);
+    cplex.getModel().remove(current_objective_function);
     IloExpr obj_expr(env);
     for (uint32_t i = 0; i < variables.size(); ++i)
-//        obj_expr += new_coefficients[i] * variables[i];
-        obj_expr += (equals(new_coefficients[i], 0.0) ? 1e-10 : new_coefficients[i]) * variables[i];
+        obj_expr += new_coefficients[i] * variables[i];
+//        obj_expr += (equals(new_coefficients[i], 0.0) ? 1e-10 : new_coefficients[i]) * variables[i];
 
     current_objective_function = IloObjective(env, obj_expr, objective_sense);
-    model.add(current_objective_function);
+    cplex.getModel().add(current_objective_function);
 }
 
 std::string CplexModel::getVariableNameFromIndex(uint64_t index) const {
@@ -167,10 +172,6 @@ std::string CplexModel::getVariableNameFromIndex(uint64_t index) const {
 }
 
 IloCplex CplexModel::getCplexSolver(bool exact) {
-    cplex = IloCplex(model);
-    cplex.setParam(IloCplex::Param::Threads, 16);
-    cplex.setParam(IloCplex::Param::Parallel, 1);
-    cplex.setOut(env.getNullStream());
     if (exact) {
         this->setCplexTimeLimitInSeconds(INT_MAX);
     } else {
@@ -198,7 +199,7 @@ std::vector<IloNumVar> CplexModel::getVariables() const {
 IloRange CplexModel::addGreaterThanOrEqualToConstraint(const std::set<uint64_t> &constraint,
                                                        double greater_than_or_equal_to) {
     IloRange cplex_constraint = buildGreaterThanOrEqualToConstraint(constraint, greater_than_or_equal_to);
-    model.add(cplex_constraint);
+    cplex.getModel().add(cplex_constraint);
     all_constraints[cplex_constraint.getName()] = cplex_constraint;
     return cplex_constraint;
 }
@@ -206,7 +207,7 @@ IloRange CplexModel::addGreaterThanOrEqualToConstraint(const std::set<uint64_t> 
 IloRange CplexModel::addLowerThanOrEqualToConstraint(const std::set<uint64_t> &constraint,
                                                      double lower_than_or_equal_to) {
     IloRange cplex_constraint = buildLowerThanOrEqualToConstraint(constraint, lower_than_or_equal_to);
-    model.add(cplex_constraint);
+    cplex.getModel().add(cplex_constraint);
     all_constraints[cplex_constraint.getName()] = cplex_constraint;
     return cplex_constraint;
 }
@@ -234,7 +235,7 @@ IloRange CplexModel::addRangeConstraint(const std::set<uint64_t> &constraint,
                                         double upper_bound) {
     IloRange current_constraint = buildConstraint(constraint, lower_bound, upper_bound);
     all_constraints[current_constraint.getName()] = current_constraint;
-    model.add(current_constraint);
+    cplex.getModel().add(current_constraint);
     return current_constraint;
 }
 
@@ -243,7 +244,12 @@ IloRange CplexModel::addRangeConstraint(const Bitset &constraint,
                                         double upper_bound) {
     IloRange current_constraint = buildConstraint(constraint, lower_bound, upper_bound);
     all_constraints[current_constraint.getName()] = current_constraint;
-    model.add(current_constraint);
+    cplex.getModel().add(current_constraint);
     return current_constraint;
 }
+
+CplexModel::~CplexModel() {
+    cplex.end();
+}
+
 

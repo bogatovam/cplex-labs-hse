@@ -96,4 +96,6 @@ public:
     void updateObjectiveFunction(const std::vector<double> &new_coefficients);
 
     IloRange buildConstraint(const Bitset &constraint, double lower_bound, const double upper_bound);
+
+    virtual ~CplexModel();
 };
