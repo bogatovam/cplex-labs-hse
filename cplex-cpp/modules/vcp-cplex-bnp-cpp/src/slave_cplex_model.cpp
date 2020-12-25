@@ -10,10 +10,7 @@ std::set<std::set<uint64_t>> SlaveCplexModel::buildCliquesConstraints(const Grap
         for (const auto &bit_independent_set: current_independent_sets) {
 
             auto improved = LocalSearchLauncher::independentSetLocalSearch(bit_independent_set, complement_graph);
-            if (improved.second.count() > bit_independent_set.count()) {
-                std::cout << "IS was improved by ILS: ( " << bit_independent_set.count() << ") ->" << "( "
-                          << improved.second.count() << ")" << std::endl;
-            }
+
             std::set<uint64_t> clique;
             for (uint64_t i = 0; i < complement_graph.n_; ++i) {
                 if (!improved.second[i]) continue;
@@ -64,17 +61,10 @@ void SlaveCplexModel::updateObjectiveFunction(const std::vector<double> &new_coe
 }
 
 IloConstraint SlaveCplexModel::addForbiddenSet(const Bitset &set_vertices) {
-    std::cout << "\nAdd constraint (forbidden set) to slave model:\t";
-    for (std::size_t i = 0; i < vertex_count; ++i) {
-        if (!set_vertices[i]) continue;
-        std::cout << "x[" << i << "]\t";
-    }
-    std::cout << std::endl;
     return model.addRangeConstraint(set_vertices, 0, (double) set_vertices.count() - 1);
 }
 
 void SlaveCplexModel::removeForbiddenSet(const IloConstraint &constraint) {
-    std::cout << "\nRemove constraint (forbidden set) to slave model:\t" << constraint.getName() << "" << std::endl;
     model.deleteConstraint(constraint);
 }
 
@@ -95,12 +85,12 @@ IntegerSolution SlaveCplexModel::getIntegerSolution(bool exact) {
         solver_variables.set(i, solver.getValue(variables[i]) == 1.0);
     }
 
-    std::cout << "\nGot integer solution from slave model:\tupper_bound:=" << upper_bound << "\tobjective value:="
-              << solver.getObjValue() << "\tvalues:=";
-    for (std::size_t i = 0; i < variables.size(); ++i) {
-        if (!solver_variables[i]) continue;
-        std::cout << "x[" << i << "]\t";
-    }
-    std::cout << std::endl;
+//    std::cout << "\nGot integer solution from slave model:\tupper_bound:=" << upper_bound << "\tobjective value:="
+//              << solver.getObjValue() << "\tvalues:=";
+//    for (std::size_t i = 0; i < variables.size(); ++i) {
+//        if (!solver_variables[i]) continue;
+//        std::cout << "x[" << i << "]\t";
+//    }
+//    std::cout << std::endl;
     return {upper_bound, solver_variables};
 }

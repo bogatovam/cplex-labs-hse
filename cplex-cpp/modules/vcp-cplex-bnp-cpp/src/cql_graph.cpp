@@ -106,7 +106,7 @@ IndependentSets Graph::colorWeightedGraph(const std::vector<double> &weights) co
 #endif
     IndependentSets sets;
     for (auto const &color: color_to_vertex_bitset) {
-        sets.emplace_back(supplementSetsToMaximumForInclusion(color.second).second);
+        sets.emplace_back(supplementSetsToMaximumForInclusion(color.second));
     }
     return sets;
 }
@@ -142,7 +142,7 @@ IndependentSets Graph::getIndependentSetByColoring(const NodesOrderingStrategy &
 #endif
     IndependentSets sets;
     for (auto const &color: color_to_vertex_bitset) {
-        sets.emplace_back(supplementSetsToMaximumForInclusion(color.second).second);
+        sets.emplace_back(supplementSetsToMaximumForInclusion(color.second));
     }
     return sets;
 }
@@ -159,6 +159,48 @@ std::vector<WeightToVertices> Graph::getWeightedIndependentSet(const std::vector
     }
     std::sort(result.begin(), result.end(), [](WeightToVertices a, WeightToVertices b) { return a.first > b.first; });
     return result;
+}
+
+std::vector<uint64_t> Graph::orderVerticesSaturationSmallestFirstWeighted(const std::vector<double> &weights) const {
+    std::vector<uint64_t> mutable_degrees(n_, 0);
+    std::vector<uint64_t> support = verticesSupport();
+    std::vector<uint64_t> ordered_vertices;
+
+    for (std::size_t i = 0; i < n_; ++i) {
+        mutable_degrees[i] = degree(i);
+    }
+
+    auto set_function = [&](uint64_t i, uint64_t j) {
+        return (weights[i] > weights[j]) ||
+               (weights[i] == weights[j] && mutable_degrees[i] < mutable_degrees[j]) ||
+               (weights[i] == weights[j] && (mutable_degrees[i] == mutable_degrees[j]) && (support[i] < support[j])) ||
+               (weights[i] == weights[j] && (mutable_degrees[i] == mutable_degrees[j]) && (support[i] == support[j]) &&
+                i < j);
+    };
+
+    std::set<uint64_t, decltype(set_function)> degree_support_index_queue(set_function);
+    degree_support_index_queue.insert(vertices.begin(), vertices.end());
+
+    while (!degree_support_index_queue.empty()) {
+        uint64_t next_vertex = *degree_support_index_queue.begin();
+        degree_support_index_queue.erase(degree_support_index_queue.begin());
+
+        mutable_degrees[next_vertex] = 0;
+
+        ordered_vertices.push_back(next_vertex);
+
+        for (const uint64_t neighbor: adjacency_lists_[next_vertex]) {
+            // check if vertex already in ordered vertexes
+            if (mutable_degrees[neighbor] != 0) {
+                degree_support_index_queue.erase(neighbor);
+                mutable_degrees[neighbor]--;
+                // Let's don't connect mutable_degrees and support. It is simpler
+                support[neighbor] -= degree(next_vertex);
+                degree_support_index_queue.insert(neighbor);
+            }
+        }
+    }
+    return ordered_vertices;
 }
 
 std::vector<uint64_t> Graph::verticesSupport() const {
@@ -289,50 +331,7 @@ std::vector<uint64_t> Graph::orderVertices(const NodesOrderingStrategy &strategy
     return vertices;
 }
 
-std::vector<uint64_t> Graph::orderVerticesSaturationSmallestFirstWeighted(const std::vector<double> &weights) const {
-    std::vector<uint64_t> mutable_degrees(n_, 0);
-    std::vector<uint64_t> support = verticesSupport();
-    std::vector<uint64_t> ordered_vertices;
-
-    for (std::size_t i = 0; i < n_; ++i) {
-        mutable_degrees[i] = degree(i);
-    }
-
-    auto set_function = [&](uint64_t i, uint64_t j) {
-        return (weights[i] > weights[j]) ||
-               (weights[i] == weights[j] && mutable_degrees[i] < mutable_degrees[j]) ||
-               (weights[i] == weights[j] && (mutable_degrees[i] == mutable_degrees[j]) && (support[i] < support[j])) ||
-               (weights[i] == weights[j] && (mutable_degrees[i] == mutable_degrees[j]) && (support[i] == support[j]) &&
-                i < j);
-    };
-
-    std::set<uint64_t, decltype(set_function)> degree_support_index_queue(set_function);
-    degree_support_index_queue.insert(vertices.begin(), vertices.end());
-
-    while (!degree_support_index_queue.empty()) {
-        uint64_t next_vertex = *degree_support_index_queue.begin();
-        degree_support_index_queue.erase(degree_support_index_queue.begin());
-
-        mutable_degrees[next_vertex] = 0;
-
-        ordered_vertices.push_back(next_vertex);
-
-        for (const uint64_t neighbor: adjacency_lists_[next_vertex]) {
-            // check if vertex already in ordered vertexes
-            if (mutable_degrees[neighbor] != 0) {
-                degree_support_index_queue.erase(neighbor);
-                mutable_degrees[neighbor]--;
-                // Let's don't connect mutable_degrees and support. It is simpler
-                support[neighbor] -= degree(next_vertex);
-                degree_support_index_queue.insert(neighbor);
-            }
-        }
-    }
-    return ordered_vertices;
-}
-
-
-std::pair<bool, Column> Graph::supplementSetsToMaximumForInclusion(const Column &independent_set) const {
+Column Graph::supplementSetsToMaximumForInclusion(const Column &independent_set) const {
     Column supplemented = independent_set;
     bool hasImprovements;
     while (true) {
@@ -360,7 +359,7 @@ std::pair<bool, Column> Graph::supplementSetsToMaximumForInclusion(const Column 
         throw std::runtime_error("set is not independent");
     }
 #endif
-    return {hasImprovements, supplemented};
+    return supplemented;
 }
 
 Graph Graph::buildComplementGraph() const {

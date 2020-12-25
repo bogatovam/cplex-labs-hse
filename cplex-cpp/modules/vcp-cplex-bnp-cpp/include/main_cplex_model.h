@@ -27,11 +27,11 @@ public:
 
     MainFloatSolution solveFloatProblem();
 
-    void excludeColoringWithVariableIndex(size_t variable);
+    IloConstraint excludeColoringWithVariableIndex(size_t variable);
 
-    void includeColoringWithVariableIndex(size_t variable);
+    IloConstraint includeColoringWithVariableIndex(size_t variable);
 
-    void removeBranchingRestrictionsFromVariable(size_t variable);
+    void removeConstraint(const IloConstraint &constraint);
 
     void switchToNewConstraint(size_t variable_index);
 
@@ -39,5 +39,5 @@ public:
 
     void printModelStatistic() const;
 
-    IndependentSets getVariablesByIds(const std::set<uint64_t>& set);
+    IndependentSets getVariablesByIds(const std::set<uint64_t> &set);
 };

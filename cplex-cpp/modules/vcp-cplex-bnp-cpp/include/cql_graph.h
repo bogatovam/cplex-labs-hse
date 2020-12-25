@@ -52,7 +52,7 @@ public:
 
     std::vector<WeightToVertices> getWeightedIndependentSet(const std::vector<double> &weights) const;
 
-    std::pair<bool, Column> supplementSetsToMaximumForInclusion(const Column &independent_set) const;
+    Column supplementSetsToMaximumForInclusion(const Column &independent_set) const;
 
     std::vector<uint64_t> verticesSupport() const;
 

@@ -3,12 +3,12 @@
 bool MainCplexModel::addColoringAsVariable(const Column &coloring) {
     for (const auto &existing_variable: variable_index_to_independent_set) {
         if (existing_variable == coloring) {
-            std::cout << "\nVariable already exists:\t";
-            for (std::size_t j = 0; j < vertex_count; ++j) {
-                if (!coloring[j]) continue;
-                std::cout << j << ",\t";
-            }
-            std::cout << std::endl;
+//            std::cout << "\nVariable already exists:\t";
+//            for (std::size_t j = 0; j < vertex_count; ++j) {
+//                if (!coloring[j]) continue;
+//                std::cout << j << ",\t";
+//            }
+//            std::cout << std::endl;
 //            printModelStatistic();
             return true;
         }
@@ -36,21 +36,16 @@ void MainCplexModel::switchToNewConstraint(std::size_t variable_index) {
 }
 
 
-void MainCplexModel::excludeColoringWithVariableIndex(std::size_t variable) {
-    IloConstraint constraint = model.addEqualityConstraintToVariable(variable, 0);
-    variable_index_to_branching_constraint[variable] = constraint;
-    std::cout << "\nBRANCHING by variable:=\t" << variable << "\texcluding coloring...";
+IloConstraint MainCplexModel::excludeColoringWithVariableIndex(std::size_t variable) {
+    return model.addEqualityConstraintToVariable(variable, 0);
 }
 
-void MainCplexModel::includeColoringWithVariableIndex(std::size_t variable) {
-    IloConstraint constraint = model.addGreaterThanOrEqualToConstraint({variable}, 1);
-    variable_index_to_branching_constraint[variable] = constraint;
-    std::cout << "\nBRANCHING by variable:=\t" << variable << "\tincluding coloring...";
+IloConstraint MainCplexModel::includeColoringWithVariableIndex(std::size_t variable) {
+    return model.addGreaterThanOrEqualToConstraint({variable}, 1);
 }
 
-void MainCplexModel::removeBranchingRestrictionsFromVariable(std::size_t variable) {
-    std::cout << "\nBRANCHING:  reset variable:=\t" << variable << "\t";
-    model.deleteConstraint(variable_index_to_branching_constraint[variable]);
+void MainCplexModel::removeConstraint(const IloConstraint &constraint) {
+    model.deleteConstraint(constraint);
 }
 
 MainCplexModel::MainCplexModel(const IndependentSets &initial_colorings, std::size_t vertex_count) :
@@ -71,7 +66,6 @@ MainCplexModel::MainCplexModel(const IndependentSets &initial_colorings, std::si
         i++;
     }
     cplex_vertex_constraints = model.addGreaterThanOrEqualToConstraints(constraints, 1);
-    std::cout << "\nMaster model created...\n";
 }
 
 MainFloatSolution MainCplexModel::solveFloatProblem() {

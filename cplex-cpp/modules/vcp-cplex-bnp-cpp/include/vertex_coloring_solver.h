@@ -72,3 +72,15 @@ namespace vertex_coloring_solver {
 
     IndependentSets solveByHeuristic(const Graph &graph);
 }
+class Branching {
+public:
+    uint64_t variable;
+
+    bool way;
+
+    bool is_init;
+
+    Branching(uint64_t variable, bool way);
+
+    Branching &operator=(const Branching &other) = default;
+};
