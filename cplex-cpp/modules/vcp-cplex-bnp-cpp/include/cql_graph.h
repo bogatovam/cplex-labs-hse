@@ -18,8 +18,6 @@ enum class NodesOrderingStrategy {
 };
 typedef Bitset Column;
 
-typedef std::pair<double, Column> WeightWithColumn;
-
 typedef std::vector<Column> IndependentSets;
 
 typedef std::pair<double, Bitset> WeightToVertices;
@@ -85,4 +83,17 @@ public:
     inline std::size_t degree(uint64_t vertex) const {
         return adjacency_lists_[vertex].size();
     }
+};
+
+class WeightWithColumn {
+public:
+    double weight;
+
+    Column column;
+
+    WeightWithColumn(double weight, const Column &column);
+
+    WeightWithColumn &operator=(const WeightWithColumn &other) = default;
+
+    bool operator<(const WeightWithColumn &rhs) const;
 };

@@ -25,6 +25,19 @@ bool isNumberInteger(double number);
 
 bool isNumberCloseToInteger(double number, double eps = 0.00001);
 
+static bool greaterThan(double a, double b, double epsilon = 1e-8) {
+    return (a - b) > ((fabs(a) < fabs(b) ? fabs(b) : fabs(a)) * epsilon);
+}
+
+static bool lessThan(double a, double b, double epsilon = 1e-8) {
+    return (b - a) > ((fabs(a) < fabs(b) ? fabs(b) : fabs(a)) * epsilon);
+}
+
+static bool equals(double a, double b, double epsilon = 1e-8) {
+    return fabs(a - b) < epsilon;
+}
+
+
 class FloatSolution {
 public:
 
@@ -53,7 +66,7 @@ public:
     std::set<uint64_t> extractResult() const {
         std::set<uint64_t> result;
         for (std::size_t i = 0; i < values.size(); ++i) {
-            if (values[i] == 1.0) {
+            if (equals(values[i], 1.0)) {
                 result.insert(i);
             }
         }
@@ -101,7 +114,7 @@ public:
 
     MainFloatSolution &operator=(const MainFloatSolution &other) = default;
 
-    void print();
+    void print() const;
 };
 
 class Timer {

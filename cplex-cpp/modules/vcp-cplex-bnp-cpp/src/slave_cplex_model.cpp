@@ -60,13 +60,6 @@ SlaveCplexModel::SlaveCplexModel(const Graph &graph) :
 }
 
 void SlaveCplexModel::updateObjectiveFunction(const std::vector<double> &new_coefficients) {
-    std::cout << "\nSlave model will be updated with the next coefficient:\t";
-    uint64_t i = 0;
-    for (auto h: new_coefficients) {
-        std::cout << "x[" << i << "]=" << h << " ";
-        i++;
-    }
-    std::cout << std::endl;
     model.updateObjectiveFunction(new_coefficients);
 }
 
@@ -87,12 +80,6 @@ void SlaveCplexModel::removeForbiddenSet(const IloConstraint &constraint) {
 
 IntegerSolution SlaveCplexModel::getIntegerSolution(bool exact) {
     IloCplex solver = model.getCplexSolver(exact);
-    std::cout << "\nSolving slave model:\t objective:=\t";
-
-    for (auto it = solver.getObjective().getLinearIterator(); it.ok(); ++it) {
-        std::cout << it.getCoef() << " * " << it.getVar().getName() << " + ";
-    }
-    std::cout << " -> min" << std::endl;
     bool isSolved = solver.solve();
     double upper_bound = DBL_MAX;
     Bitset solver_variables;
@@ -110,7 +97,7 @@ IntegerSolution SlaveCplexModel::getIntegerSolution(bool exact) {
 
     std::cout << "\nGot integer solution from slave model:\tupper_bound:=" << upper_bound << "\tobjective value:="
               << solver.getObjValue() << "\tvalues:=";
-    for (std::size_t i = 0; i < vertex_count; ++i) {
+    for (std::size_t i = 0; i < variables.size(); ++i) {
         if (!solver_variables[i]) continue;
         std::cout << "x[" << i << "]\t";
     }

@@ -38,4 +38,6 @@ public:
     Bitset getIndependentSetAssociatedWithVariableIndex(size_t variable_index);
 
     void printModelStatistic() const;
+
+    IndependentSets getVariablesByIds(const std::set<uint64_t>& set);
 };

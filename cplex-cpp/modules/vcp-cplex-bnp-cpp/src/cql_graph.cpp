@@ -155,9 +155,7 @@ std::vector<WeightToVertices> Graph::getWeightedIndependentSet(const std::vector
         for (std::size_t i = 0; i < n_; ++i) {
             weight += weights[i] * independent_set[i];
         }
-        if (weight > 1.0) {
-            result.emplace_back(std::make_pair(weight, independent_set));
-        }
+        result.emplace_back(std::make_pair(weight, independent_set));
     }
     std::sort(result.begin(), result.end(), [](WeightToVertices a, WeightToVertices b) { return a.first > b.first; });
     return result;
@@ -439,4 +437,14 @@ bool Graph::isVerticesIndependent(std::set<uint64_t> &independent_set) const {
         }
     }
     return true;
+}
+
+WeightWithColumn::WeightWithColumn(double weight, const Column &column) : weight(weight), column(column) {}
+
+bool WeightWithColumn::operator<(const WeightWithColumn &rhs) const {
+    if (lessThan(weight, rhs.weight))
+        return true;
+    if (lessThan(rhs.weight, weight))
+        return false;
+    return column.count() < rhs.column.count();
 }

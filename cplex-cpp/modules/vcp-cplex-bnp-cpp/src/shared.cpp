@@ -42,15 +42,10 @@ bool isNumberInteger(double number) {
     return modf(number, &int_part) == 0.0;
 }
 
-void MainFloatSolution::print() {
+void MainFloatSolution::print() const {
     std::cout << "Primal solution\t(size:=" << primal.size << ",integers:=" << primal.integer_variables_num << "):\t";
-    for (double value : primal.values) {
-        std::cout << value << ", \t";
-    }
     std::cout << std::endl;
     std::cout << "Dual solution\t(size:=" << dual.size << ",integers:=" << dual.integer_variables_num << "):\t";
-    for (double value : dual.values) {
-        std::cout << value << ", \t";
-    }
     std::cout << std::endl;
 }
+

@@ -73,7 +73,7 @@ double vertex_coloring_solver::ExecutionContext::roundUpWithEpsilon(double objec
 }
 
 uint64_t vertex_coloring_solver::ExecutionContext::branchingFindNearestToInteger(const FloatSolution &solution) {
-    std::pair<uint64_t, double> nearest_to_one = {0, 1.0};
+    std::pair<uint64_t, double> nearest_to_one = {UINT64_MAX, 1.0};
     for (uint64_t i = 0; i < solution.values.size(); ++i) {
         if (isNumberInteger(solution.values[i])) {
             continue;
@@ -101,6 +101,36 @@ void vertex_coloring_solver::ExecutionContext::startBranchAndPrice(MainCplexMode
     branchAndPrice(main_cplex_model, slave_cplex_model);
     // TODO достать здесь значения переменных из модели и проверить решение на коррктность
     metrics.total_execution_time = steady_clock::now() - begin;
+
+    std::set<uint64_t> result = optimal_solution.extractResult();
+    IndependentSets res = main_cplex_model.getVariablesByIds(result);
+
+    std::vector<uint64_t> colored_vertices(graph.n_, 0);
+    uint64_t color = 0;
+    for (auto set: res) {
+        for (std::size_t j = 0; j < graph.n_; ++j) {
+            if (!set[j]) continue;
+            colored_vertices[j] = color;
+        }
+        color++;
+    }
+
+    std::cout << "Found result coloring" << std::endl;
+    for (auto h: res) {
+        for (std::size_t i = 0; i < graph.n_; ++i) {
+            if (!h[i]) continue;
+            std::cout << i << "\t";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << std::endl;
+
+#ifdef CHECK_SOLUTION
+    if (!graph.isColoringCorrect(colored_vertices)) {
+        std::cout << "this color_to_vertex_bitset is not correct" << std::endl;
+        throw std::runtime_error("this color_to_vertex_bitset is not correct");
+    }
+#endif
 }
 
 
@@ -110,6 +140,7 @@ void vertex_coloring_solver::ExecutionContext::branchAndPrice(MainCplexModel &ma
     if (current_solution.primal.size == 0 &&
         current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
         std::cout << "\nDISCARD BRANCH: there is no solution" << std::endl;
+        main_cplex_model.printModelStatistic();
         metrics.onFinishBranch();
         metrics.onDiscardedBranch();
         return;
@@ -125,52 +156,33 @@ void vertex_coloring_solver::ExecutionContext::branchAndPrice(MainCplexModel &ma
             return;
         }
     }
-    // TODO возможно понадобится проверка up
     if (current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
-//        if (!is_need_to_solve_exactly) {
-        std::cout << "\nFound integer solution:=(" << current_solution.primal.size
-                  << ")\nLet's solve slave problem exactly";
-        bool just_to_test = generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution, true);
-        if (just_to_test) {
-            std::cout << "WTF Why it happened!?!?!?!" << std::endl;
-            return;
-//            throw std::runtime_error("A-A-A?!?!?!");
-        }
-        std::cout << "Solution after exact cplex column generation:=(" << current_solution.primal.size << ")"
-                  << std::endl;
-        if (current_solution.primal.integer_variables_num == current_solution.primal.values.size() &&
-            this->optimal_solution.size > current_solution.primal.size) {
+        if (this->optimal_solution.size > current_solution.primal.size) {
             std::cout << "Found better integer solution:=(" << current_solution.primal.size << ")" << std::endl;
             this->optimal_solution = current_solution.primal;
-            metrics.onFinishBranch();
-            return;
         }
-//        } else {
-//            std::cout << "Found better integer solution:=(" << current_solution.primal.size << ")" << std::endl;
-//            this->optimal_solution = current_solution.primal;
-//            metrics.onFinishBranch();
-//            return;
-//        }
+        metrics.onFinishBranch();
+        return;
     }
     std::cout << "\nSTART BRANCHING" << std::endl;
     current_solution.print();
     uint64_t branching_var = branchingFindNearestToInteger(current_solution.primal);
     std::cout << "\nBRANCHING: found variable:" << branching_var << std::endl;
 
-    std::cout << "\nBRANCHING: start branch with including x[:" << branching_var << "]" << std::endl;
+    std::cout << "\nBRANCHING: start branch with including x[" << branching_var << "]" << std::endl;
     main_cplex_model.includeColoringWithVariableIndex(branching_var);
     branchAndPrice(main_cplex_model, slave_cplex_model);
     main_cplex_model.removeBranchingRestrictionsFromVariable(branching_var);
-    std::cout << "\nBRANCHING: finish branch with including x[:" << branching_var << "]" << std::endl;
+    std::cout << "\nBRANCHING: finish branch with including x[" << branching_var << "]" << std::endl;
 
-    std::cout << "\nBRANCHING: start branch with excluding x[:" << branching_var << "]" << std::endl;
+    std::cout << "\nBRANCHING: start branch with excluding x[" << branching_var << "]" << std::endl;
     main_cplex_model.excludeColoringWithVariableIndex(branching_var);
     auto slave_forbidden_constraint = slave_cplex_model.addForbiddenSet(
             main_cplex_model.getIndependentSetAssociatedWithVariableIndex(branching_var));
     branchAndPrice(main_cplex_model, slave_cplex_model);
     slave_cplex_model.removeForbiddenSet(slave_forbidden_constraint);
     main_cplex_model.removeBranchingRestrictionsFromVariable(branching_var);
-    std::cout << "\nBRANCHING: finish branch with excluding x[:" << branching_var << "]" << std::endl;
+    std::cout << "\nBRANCHING: finish branch with excluding x[" << branching_var << "]" << std::endl;
     metrics.onFinishBranch();
 }
 
@@ -181,27 +193,35 @@ bool vertex_coloring_solver::ExecutionContext::generateColumnsByHeuristic(MainCp
     double previous_upper_bound = roundUpWithEpsilon(current_solution.primal.size);
     std::cout << "\n\nSTART HEURISTIC COLUMN GENERATION" << std::endl;
     while (true) {
-        WeightWithColumn column_to_add = findColumnToAddToModel(current_solution.dual);
-        std::cout << "\nFound column to add:\t weight:=" << column_to_add.first << "\tvalues";
-        for (std::size_t j = 0; j < graph.n_; ++j) {
-            if (!column_to_add.second[j]) continue;
-            std::cout << j << ",\t";
+        auto columns_to_add = findColumnToAddToModel(current_solution.dual);
+        std::cout << "\nFound " << columns_to_add.size() << " columns to add\n";
+        for (auto column_to_add: columns_to_add) {
+            std::cout << "Weight:=" << column_to_add.weight
+                      << "\t Values\t";
+            for (std::size_t j = 0; j < graph.n_; ++j) {
+                if (!column_to_add.column[j]) continue;
+                std::cout << j << ",\t";
+            }
+            std::cout << std::endl;
         }
         std::cout << std::endl;
-        if (column_to_add.first < 1) {
-            std::cout << "\n\nSTOP  HEURISTIC COLUMN GENERATION: can't find any violated constraints" << std::endl;
+        if (columns_to_add.empty()) {
+            std::cout << "\n\nSTOP HEURISTIC COLUMN GENERATION: can't find any violated constraints" << std::endl;
             return true;
         }
-        bool isVariableExists = main_cplex_model.addColoringAsVariable(column_to_add.second);
-        if (isVariableExists) {
-            std::cout << "\n\nSTOP  HEURISTIC COLUMN GENERATION: variable already exists" << std::endl;
+        bool isAllVariablesExists = true;
+        for (auto column_to_add: columns_to_add) {
+            isAllVariablesExists &= main_cplex_model.addColoringAsVariable(column_to_add.column);
+        }
+        if (isAllVariablesExists) {
+            std::cout << "\n\nSTOP HEURISTIC COLUMN GENERATION: all variables already exists" << std::endl;
             return true;
         }
         current_solution = main_cplex_model.solveFloatProblem();
         std::cout << "\nFound Main problem solution:" << std::endl;
         current_solution.print();
         if (isTailingOff(std::fabs(current_solution.primal.size - previous_upper_bound))) {
-            std::cout << "\n\nSTOP  HEURISTIC COLUMN GENERATION: objective function delta is too small:"
+            std::cout << "\n\nSTOP HEURISTIC COLUMN GENERATION: objective function delta is too small:"
                       << std::fabs(current_solution.primal.size - previous_upper_bound) << "" << std::endl;
             return true;
         }
@@ -212,43 +232,39 @@ bool vertex_coloring_solver::ExecutionContext::generateColumnsByHeuristic(MainCp
 // возвращается истина, если можно отбросить ветку
 bool vertex_coloring_solver::ExecutionContext::generateColumnsByCplex(MainCplexModel &main_cplex_model,
                                                                       SlaveCplexModel &slave_cplex_model,
-                                                                      MainFloatSolution &current_solution, bool exact) const {
+                                                                      MainFloatSolution &current_solution,
+                                                                      bool exact) const {
     std::cout << "\n\nSTART CPLEX COLUMN GENERATION: " << std::endl;
     double previous_upper_bound = roundUpWithEpsilon(current_solution.primal.size);;
     while (true) {
         current_solution.print();
-        if (current_solution.primal.size == 0 &&
-            current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
-            std::cout << "\nDISCARD BRANCH: there is no solution" << std::endl;
-            return true;
-        }
         slave_cplex_model.updateObjectiveFunction(current_solution.dual.values);
         IntegerSolution slave_solution = slave_cplex_model.getIntegerSolution(exact);
         std::cout << "\nFound integer solution: " << std::endl;
         slave_solution.print();
 
         slave_solution.values = graph.supplementSetsToMaximumForInclusion(slave_solution.values).second;
-        double lower_bound = roundUpWithEpsilon(current_solution.dual.size / slave_solution.upper_bound);
+        double lower_bound = roundUpWithEpsilon(current_solution.primal.size / slave_solution.upper_bound);
         std::cout << "\nFound lower bound:\t" << lower_bound << "" << std::endl;
         if (lower_bound >= optimal_solution.size) {
-            std::cout << "\n\nSTOP  CPLEX COLUMN GENERATION: lower bound constraint" << std::endl;
+            std::cout << "\n\nSTOP CPLEX COLUMN GENERATION: lower bound constraint" << std::endl;
             return true;
         }
         // Todo что будет если максимальные по включению организовать внутри сиплекса?
-        if (slave_solution.upper_bound <= 1.0) {
-            std::cout << "\n\nSTOP  CPLEX COLUMN GENERATION: can't find any violated constraints" << std::endl;
+        if (lessThan(slave_solution.upper_bound, 1.0) || equals(slave_solution.upper_bound, 1.0)) {
+            std::cout << "\n\nSTOP CPLEX COLUMN GENERATION: can't find any violated constraints" << std::endl;
             return false;
         }
         bool isVariableExists = main_cplex_model.addColoringAsVariable(slave_solution.values);
         if (isVariableExists) {
-            std::cout << "\n\nSTOP  CPLEX COLUMN GENERATION: variable already exists" << std::endl;
+            std::cout << "\n\nSKIP CPLEX COLUMN GENERATION: variable already exists" << std::endl;
             return false;
         }
         current_solution = main_cplex_model.solveFloatProblem();
         std::cout << "\nFound Main problem solution:" << std::endl;
         current_solution.print();
         if (isTailingOff(std::fabs(current_solution.primal.size - previous_upper_bound))) {
-            std::cout << "\n\nSTOP  CPLEX COLUMN GENERATION: objective function delta is too small:"
+            std::cout << "\n\nSTOP CPLEX COLUMN GENERATION: objective function delta is too small:"
                       << std::fabs(current_solution.primal.size - previous_upper_bound) << "" << std::endl;
             return false;
         }
@@ -257,43 +273,40 @@ bool vertex_coloring_solver::ExecutionContext::generateColumnsByCplex(MainCplexM
 }
 
 //find The Most Weighty Violated Constraint in dual problem
-WeightWithColumn vertex_coloring_solver::ExecutionContext::findColumnToAddToModel(const FloatSolution &solution) {
-    // TODO try to use all colors
+std::set<WeightWithColumn> vertex_coloring_solver::ExecutionContext::findColumnToAddToModel(
+        const FloatSolution &solution) {
+    std::set<WeightWithColumn> result_columns;
     auto coloring_independent_sets = graph.getWeightedIndependentSet(solution.values);
-    if (coloring_independent_sets.empty()) {
-        return {0, {}};
-    }
-    std::cout << "\nHEURISTIC COLUMN GENERATION: found " << coloring_independent_sets.size() << " IS-s" << std::endl;
-    WeightToVertices best_candidate = *coloring_independent_sets.rbegin();
-    // TODO check local search performance
-    WeightWithColumn improved = LocalSearchLauncher::localSearch(best_candidate.second, graph,
-                                                                 solution.values);
-    if (improved.first > best_candidate.first) {
-        std::cout << "IS was improved by ILS: (" << best_candidate.first << ", "
-                  << best_candidate.second.count() << ") ->" << "(" << improved.first << ", "
-                  << improved.second.count() << ")" << std::endl;
-    } else {
-        std::cout << "IS was NOT improved by ILS: (" << best_candidate.first << ", "
-                  << best_candidate.second.count() << ")" << std::endl;
-    }
-    std::pair<bool, Column> result = graph.supplementSetsToMaximumForInclusion(improved.second);
+
+    std::cout << "\nHEURISTIC COLUMN GENERATION: found " << coloring_independent_sets.size() << " independent sets"
+              << std::endl;
+
+    for (const auto &current_coloring: coloring_independent_sets) {
+        // TODO check local search performance
+        WeightWithColumn improved = LocalSearchLauncher::localSearch(current_coloring.second, graph,
+                                                                     solution.values);
+        if (improved.weight > current_coloring.first) {
+            std::cout << "IS was improved by ILS: (" << current_coloring.first << ", "
+                      << current_coloring.second.count() << ") ->" << "(" << improved.weight << ", "
+                      << improved.column.count() << "):\t" << std::endl;
+        } else {
+            std::cout << "IS was NOT improved by ILS: (" << current_coloring.first << ", "
+                      << current_coloring.second.count() << ")" << std::endl;
+        }
+
+        std::pair<bool, Column> final_wis = graph.supplementSetsToMaximumForInclusion(improved.column);
 #ifdef CHECK_SOLUTION
-    auto tmp = asSet(result.second, graph.n_);
-    if (!graph.isVerticesIndependent(tmp)) {
-        std::cout << "set is not independent" << std::endl;
-        throw std::runtime_error("set is not independent");
-    }
+        if (!graph.isVerticesIndependent(final_wis.second)) {
+            std::cout << "set is not independent" << std::endl;
+            throw std::runtime_error("set is not independent");
+        }
 #endif
-    if (result.first) {
-        std::cout << "IS was improved by supplementation : (" << improved.first << ", "
-                  << improved.second.count() << ") ->" << "(" << calculateWeight(result.second, solution.values) << ", "
-                  << result.second.count() << ")" << std::endl;
-        return {calculateWeight(result.second, solution.values), result.second};
-    } else {
-        std::cout << "IS was NOT improved by supplementation: (" << improved.first << ", "
-                  << improved.second.count() << ")" << std::endl;
-        return improved;
+        double final_weight = calculateWeight(final_wis.second, solution.values);
+        if (greaterThan(final_weight, 1.0)) {
+            result_columns.emplace(final_weight, final_wis.second);
+        }
     }
+    return result_columns;
 }
 
 double vertex_coloring_solver::ExecutionContext::calculateWeight(const Column &independent_set,

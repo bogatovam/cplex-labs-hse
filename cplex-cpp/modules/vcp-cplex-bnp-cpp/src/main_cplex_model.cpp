@@ -9,7 +9,7 @@ bool MainCplexModel::addColoringAsVariable(const Column &coloring) {
                 std::cout << j << ",\t";
             }
             std::cout << std::endl;
-            printModelStatistic();
+//            printModelStatistic();
             return true;
         }
     }
@@ -25,7 +25,7 @@ bool MainCplexModel::addColoringAsVariable(const Column &coloring) {
         switchToNewConstraint(i);
     }
 
-    printModelStatistic();
+//    printModelStatistic();
     return false;
 }
 
@@ -37,7 +37,7 @@ void MainCplexModel::switchToNewConstraint(std::size_t variable_index) {
 
 
 void MainCplexModel::excludeColoringWithVariableIndex(std::size_t variable) {
-    IloConstraint constraint = model.addLowerThanOrEqualToConstraint({variable}, 1);
+    IloConstraint constraint = model.addEqualityConstraintToVariable(variable, 0);
     variable_index_to_branching_constraint[variable] = constraint;
     std::cout << "\nBRANCHING by variable:=\t" << variable << "\texcluding coloring...";
 }
@@ -75,7 +75,6 @@ MainCplexModel::MainCplexModel(const IndependentSets &initial_colorings, std::si
 }
 
 MainFloatSolution MainCplexModel::solveFloatProblem() {
-    printModelStatistic();
     IloCplex solver = model.getCplexSolver();
     bool isSolved = solver.solve();
     uint64_t variables_count = model.getVariablesCount();
@@ -84,12 +83,12 @@ MainFloatSolution MainCplexModel::solveFloatProblem() {
     std::vector<double> primal_variables(variables_count, 0.0);
 
     double dual_obj_value = 0;
-    std::vector<double> dual_variables(cplex_vertex_constraints.getSize(), 0.0);
+    std::vector<double> dual_values(cplex_vertex_constraints.getSize(), 0.0);
 
     if (!isSolved) {
-        std::cout << "It is impossible to solve CPLEX model'" << std::endl;
+        std::cout << "It is impossible to solve CPLEX model" << std::endl;
         return {{primal_obj_value, primal_variables},
-                {dual_obj_value,   dual_variables}};
+                {dual_obj_value,   dual_values}};
     }
 
     primal_obj_value = solver.getObjValue();
@@ -99,14 +98,16 @@ MainFloatSolution MainCplexModel::solveFloatProblem() {
     for (uint64_t i = 0; i < variables.size(); ++i) {
         primal_variables[i] = solver.getValue(variables[i]);
     }
-    IloNumArray dual_vars(solver.getEnv(), cplex_vertex_constraints.getSize());
-    solver.getDuals(dual_vars, cplex_vertex_constraints);
+    IloNumArray dual_variabless(solver.getEnv(), cplex_vertex_constraints.getSize());
+    solver.getDuals(dual_variabless, cplex_vertex_constraints);
+    double summ = 0.0;
     for (int i = 0; i < cplex_vertex_constraints.getSize(); ++i) {
-        dual_variables[i] =  dual_vars[i];
+        dual_values[i] = dual_variabless[i];
+        summ += dual_values[i];
     }
 
     return {{primal_obj_value, primal_variables},
-            {dual_obj_value,   dual_variables}};
+            {dual_obj_value,   dual_values}};
 }
 
 Bitset MainCplexModel::getIndependentSetAssociatedWithVariableIndex(size_t variable_index) {
@@ -143,4 +144,12 @@ void MainCplexModel::printModelStatistic() const {
         std::cout << ")\n";
     }
     std::cout << std::endl;
+}
+
+IndependentSets MainCplexModel::getVariablesByIds(const std::set<uint64_t> &set) {
+    IndependentSets res;
+    for (auto j: set) {
+        res.push_back(variable_index_to_independent_set[j]);
+    }
+    return res;
 }

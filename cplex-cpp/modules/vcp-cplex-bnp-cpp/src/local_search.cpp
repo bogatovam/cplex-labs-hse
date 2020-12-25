@@ -103,7 +103,10 @@ std::vector<uint64_t> LocalSearchExecutionContext::calculateTightness(Bitset pos
 void WISLocalSearchExecutionContext::localSearch() {
 
     uint64_t w1_swap = getNextW1SwapCandidate();
+    Bitset used;
     while (w1_swap != UINT64_MAX) {
+        if (used[w1_swap]) break;
+        used.set(w1_swap, true);
         // delete neighbors and add new vertex
         updateSet(graph.confusion_matrix_bit_set_[w1_swap], w1_swap);
         w1_swap = getNextW1SwapCandidate();
@@ -161,7 +164,8 @@ std::pair<uint64_t, uint64_t> WISLocalSearchExecutionContext::findFirst12Swap(do
         if (!candidates[v]) continue;
         for (std::size_t u = v + 1; u < graph.n_; ++u) {
             if (!candidates[u]) continue;
-            if (!graph.confusion_matrix_bit_set_[v][u] && w_to_delete <= weights[u] + weights[v]) {
+            if (!graph.confusion_matrix_bit_set_[v][u] &&
+                (lessThan(w_to_delete, weights[u] + weights[v]) || equals(w_to_delete, weights[u] + weights[v]))) {
                 return {v, u};
             }
         }
@@ -207,17 +211,19 @@ std::map<uint64_t, Bitset> WISLocalSearchExecutionContext::build12SwapCandidates
 uint64_t WISLocalSearchExecutionContext::getNextW1SwapCandidate() const {
     // (w, 1) swap - добаляем одну вершину и удаляем ее соседей
     // (только в том случае, если ее вес больше, чем вес всех ее соседей)
-    uint64_t vertex_with_max_weights_diff = 0;
-    bool isFound = false;
+    uint64_t vertex_with_max_weights_diff = UINT64_MAX;
     for (std::size_t v = 0; v < graph.n_; ++v) {
         // рассматриваем только вершин не из решения и которые при добавлении не уменьшат вес решения
         if (current_solution[v] || std::round(weights_diff[v]) <= 0) continue;
-        isFound = true;
-        vertex_with_max_weights_diff =
-                weights_diff[v] > vertex_with_max_weights_diff ? v
-                                                               : vertex_with_max_weights_diff;
+        if (vertex_with_max_weights_diff == UINT64_MAX) {
+            vertex_with_max_weights_diff = v;
+        } else {
+            vertex_with_max_weights_diff =
+                    greaterThan(weights_diff[v], weights_diff[vertex_with_max_weights_diff]) ? v
+                                                                                             : vertex_with_max_weights_diff;
+        }
     }
-    return isFound ? vertex_with_max_weights_diff : UINT64_MAX;
+    return vertex_with_max_weights_diff;
 }
 
 void WISLocalSearchExecutionContext::updateSetAndCandidates(uint64_t deleted, std::pair<uint64_t, uint64_t> inserted,
@@ -290,9 +296,9 @@ double WISLocalSearchExecutionContext::weight() {
 }
 
 
-std::pair<double, Bitset> LocalSearchLauncher::localSearch(Bitset initial_solution,
-                                                           const Graph &graph,
-                                                           const std::vector<double> &weights) {
+WeightWithColumn LocalSearchLauncher::localSearch(Bitset initial_solution,
+                                                  const Graph &graph,
+                                                  const std::vector<double> &weights) {
     WISLocalSearchExecutionContext current_solution(initial_solution, graph, weights);
     current_solution.localSearch();
 
@@ -301,7 +307,7 @@ std::pair<double, Bitset> LocalSearchLauncher::localSearch(Bitset initial_soluti
     uint64_t non_changed_iteration = 0;
 
     WISLocalSearchExecutionContext local_solution = current_solution;
-    for (std::size_t iteration = 0; iteration < 10; ++iteration) {
+    for (std::size_t iteration = 0; iteration < 100; ++iteration) {
         local_solution.perturb();
         local_solution.localSearch();
         //  acceptance

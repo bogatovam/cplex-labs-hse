@@ -121,8 +121,8 @@ public:
 
 class LocalSearchLauncher {
 public:
-    static std::pair<double, Bitset> localSearch(Bitset initial_solution, const Graph &graph,
-                                                 const std::vector<double> &weights);
+    static WeightWithColumn localSearch(Bitset initial_solution, const Graph &graph,
+                                        const std::vector<double> &weights);
 
     static std::pair<uint64_t, Bitset> localSearch(Bitset initial_solution, const Graph &graph);
 

@@ -162,6 +162,8 @@ void CplexModel::updateObjectiveFunction(const std::vector<double> &new_coeffici
     IloExpr obj_expr(env);
     for (uint32_t i = 0; i < variables.size(); ++i)
         obj_expr += new_coefficients[i] * variables[i];
+//    obj_expr += (equals(new_coefficients[i], 0.0) ? 1e-10 : new_coefficients[i]) * variables[i];
+
     current_objective_function = IloObjective(env, obj_expr, objective_sense);
     model.add(current_objective_function);
 }

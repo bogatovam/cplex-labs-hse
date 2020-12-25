@@ -55,14 +55,14 @@ namespace vertex_coloring_solver {
 
         void startBranchAndPrice(MainCplexModel &main_cplex_model, SlaveCplexModel &slave_cplex_model);
 
-        WeightWithColumn findColumnToAddToModel(const FloatSolution &solution);
+        std::set<WeightWithColumn> findColumnToAddToModel(const FloatSolution &solution);
 
         bool generateColumnsByHeuristic(MainCplexModel &main_cplex_model,
                                         MainFloatSolution &current_solution);
 
         double calculateWeight(const Column &independent_set, const std::vector<double> &weights) const;
 
-        static bool isTailingOff(double source_delta, double target_delta = 0.001);
+        static bool isTailingOff(double source_delta, double target_delta = 0.00001);
 
         bool generateColumnsByCplex(MainCplexModel &main_cplex_model, SlaveCplexModel &slave_cplex_model,
                                     MainFloatSolution &current_solution, bool b) const;
