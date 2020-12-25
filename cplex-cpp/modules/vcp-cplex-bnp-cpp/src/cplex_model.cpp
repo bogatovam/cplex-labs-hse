@@ -18,10 +18,8 @@ CplexModel::CplexModel(std::size_t variables_num, IloNumVar::Type variable_type,
 
     for (uint32_t i = 0; i < variables_num; ++i)
         obj_expr += variables[i];
-    current_objective_function = IloObjective(env, obj_expr, objective_sense);
-    this->objective_sense = objective_sense;
-    model.add(current_objective_function);
 
+    model.add(IloObjective(env, obj_expr, objective_sense));
     cplex = IloCplex(model);
     cplex.setParam(IloCplex::Param::Threads, 16);
     cplex.setParam(IloCplex::Param::Parallel, 1);
@@ -153,18 +151,14 @@ void CplexModel::deleteConstraints(const IloConstraintArray &constraints) {
 
 void CplexModel::addVariable(size_t index, double lover_bound, double upper_bound, IloNumVar::Type type) {
     variables.emplace_back(env, lover_bound, upper_bound, type, getVariableNameFromIndex(index).c_str());
-    current_objective_function.setLinearCoef(variables[index], 1);
+    cplex.getObjective().setLinearCoef(variables[index], 1);
 }
 
 void CplexModel::updateObjectiveFunction(const std::vector<double> &new_coefficients) {
-    cplex.getModel().remove(current_objective_function);
-    IloExpr obj_expr(env);
-    for (uint32_t i = 0; i < variables.size(); ++i)
-        obj_expr += new_coefficients[i] * variables[i];
-//        obj_expr += (equals(new_coefficients[i], 0.0) ? 1e-10 : new_coefficients[i]) * variables[i];
-
-    current_objective_function = IloObjective(env, obj_expr, objective_sense);
-    cplex.getModel().add(current_objective_function);
+    for (uint32_t i = 0; i < variables.size(); ++i) {
+        cplex.getObjective().setLinearCoef(variables[i],
+                                           equals(new_coefficients[i], 0.0) ? 1e-10 : new_coefficients[i]);
+    }
 }
 
 std::string CplexModel::getVariableNameFromIndex(uint64_t index) const {
@@ -246,10 +240,6 @@ IloRange CplexModel::addRangeConstraint(const Bitset &constraint,
     all_constraints[current_constraint.getName()] = current_constraint;
     cplex.getModel().add(current_constraint);
     return current_constraint;
-}
-
-CplexModel::~CplexModel() {
-    cplex.end();
 }
 
 

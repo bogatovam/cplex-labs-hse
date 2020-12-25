@@ -122,55 +122,61 @@ void vertex_coloring_solver::ExecutionContext::startBranchAndPrice(MainCplexMode
 #endif
 }
 
-
 void vertex_coloring_solver::ExecutionContext::branchAndPrice(MainCplexModel &main_cplex_model,
                                                               SlaveCplexModel &slave_cplex_model) {
-    MainFloatSolution current_solution = main_cplex_model.solveFloatProblem();
+    if (timer.is_time_over) {
+        return;
+    }
 
-    std::cout << "\n\n------------------START BRANCH------------------" << std::endl << std::endl;
+    metrics.onStartBranch();
+    MainFloatSolution current_solution = main_cplex_model.solveFloatProblem();
+//    std::cout << "\n\n------------------START BRANCH------------------" << std::endl << std::endl;
     bool is_need_to_solve_exactly = generateColumnsByHeuristic(main_cplex_model, current_solution);
     if (is_need_to_solve_exactly) {
         if (generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution, false)) {
-            std::cout << "DISCARD BRANCH: by lower bound" << std::endl;
+//            std::cout << "DISCARD BRANCH: by lower bound" << std::endl;
             metrics.onFinishBranch();
             metrics.onDiscardedBranch();
             return;
         }
     }
     if (current_solution.primal.integer_variables_num == current_solution.primal.values.size()) {
-        std::cout << "\n\nINTEGER SOLUTION:=(" << current_solution.primal.size
-                  << "):\tLet's solve slave problem exactly";
+//        std::cout << "\n\nINTEGER SOLUTION:=(" << current_solution.primal.size
+//                  << "):\tLet's solve slave problem exactly";
         if (generateColumnsByCplex(main_cplex_model, slave_cplex_model, current_solution, true)) {
+            metrics.onFinishBranch();
+            metrics.onDiscardedBranch();
             return;
         }
         if (current_solution.primal.integer_variables_num == current_solution.primal.values.size() &&
-            this->optimal_solution.size > current_solution.primal.size) {
-            std::cout << "BETTER INTEGER SOLUTION:=(" << current_solution.primal.size << ")" << std::endl;
+            greaterThan(this->optimal_solution.size, current_solution.primal.size)) {
+            std::cout << "\nBETTER INTEGER SOLUTION:=(" << current_solution.primal.size << ")" << std::endl;
             this->optimal_solution = current_solution.primal;
         }
         metrics.onFinishBranch();
         return;
     }
-    std::cout << "\n\nSTART BRANCHING" << std::endl;
+//    std::cout << "\n\nSTART BRANCHING" << std::endl;
     uint64_t branching_var = branchingFindNearestToInteger(current_solution.primal);
 
-    std::cout << "BRANCHING: found variable:" << branching_var << " with value "
-              << current_solution.primal.values[branching_var]
-              << std::endl;
+//    std::cout << "BRANCHING: found variable:" << branching_var << " with value "
+//              << current_solution.primal.values[branching_var]
+//              << std::endl;
 
-    std::cout << "BRANCHING: start branch with including x[" << branching_var << "]" << std::endl;
+//    std::cout << "BRANCHING: start branch with including x[" << branching_var << "]" << std::endl;
     auto include_constraint = main_cplex_model.includeColoringWithVariableIndex(branching_var);
+    branchAndPrice(main_cplex_model, slave_cplex_model);
     main_cplex_model.removeConstraint(include_constraint);
-    std::cout << "BRANCHING: finish branch with including x[" << branching_var << "]" << std::endl;
+//    std::cout << "BRANCHING: finish branch with including x[" << branching_var << "]" << std::endl;
 
-    std::cout << "BRANCHING: start branch with excluding x[" << branching_var << "]" << std::endl;
+//    std::cout << "BRANCHING: start branch with excluding x[" << branching_var << "]" << std::endl;
     auto exclude_constraint = main_cplex_model.excludeColoringWithVariableIndex(branching_var);
     auto slave_forbidden_constraint = slave_cplex_model.addForbiddenSet(
             main_cplex_model.getIndependentSetAssociatedWithVariableIndex(branching_var));
     branchAndPrice(main_cplex_model, slave_cplex_model);
     slave_cplex_model.removeForbiddenSet(slave_forbidden_constraint);
     main_cplex_model.removeConstraint(exclude_constraint);
-    std::cout << "\nBRANCHING: finish branch with excluding x[" << branching_var << "]" << std::endl;
+//    std::cout << "\nBRANCHING: finish branch with excluding x[" << branching_var << "]" << std::endl;
     metrics.onFinishBranch();
 }
 
@@ -186,9 +192,9 @@ bool vertex_coloring_solver::ExecutionContext::generateColumnsByHeuristic(MainCp
         iterations++;
         auto columns_to_add = findColumnToAddToModel(current_solution.dual);
         if (columns_to_add.empty()) {
-            std::cout << "\nHEURISTIC COLUMN GENERATION - ITERATION #" << iterations
-                      << ": Stop - can't find any violated constraints. Added variables: " << total_variables
-                      << std::endl;
+//            std::cout << "\nHEURISTIC COLUMN GENERATION - ITERATION #" << iterations
+//                      << ": Stop - can't find any violated constraints. Added variables: " << total_variables
+//                      << std::endl;
             return true;
         }
         bool isAllVariablesExists = true;
@@ -196,19 +202,19 @@ bool vertex_coloring_solver::ExecutionContext::generateColumnsByHeuristic(MainCp
             isAllVariablesExists &= main_cplex_model.addColoringAsVariable(column_to_add.column);
         }
         if (isAllVariablesExists) {
-            std::cout << "\nHEURISTIC COLUMN GENERATION - ITERATION #" << iterations
-                      << ": Stop - all variables already exists. Added variables: " << total_variables
-                      << std::endl;
+//            std::cout << "\nHEURISTIC COLUMN GENERATION - ITERATION #" << iterations
+//                      << ": Stop - all variables already exists. Added variables: " << total_variables
+//                      << std::endl;
             return true;
         }
         total_variables += columns_to_add.size();
         current_solution = main_cplex_model.solveFloatProblem();
         if (isTailingOff(std::fabs(current_solution.primal.size - previous_upper_bound))) {
-            std::cout << "\nHEURISTIC COLUMN GENERATION - ITERATION #" << iterations
-                      << ": Stop - objective function delta is too small:"
-                      << std::fabs(current_solution.primal.size - previous_upper_bound) << " Added variables: "
-                      << total_variables
-                      << std::endl;
+//            std::cout << "\nHEURISTIC COLUMN GENERATION - ITERATION #" << iterations
+//                      << ": Stop - objective function delta is too small:"
+//                      << std::fabs(current_solution.primal.size - previous_upper_bound) << " Added variables: "
+//                      << total_variables
+//                      << std::endl;
             return true;
         }
         previous_upper_bound = current_solution.primal.size;
@@ -230,32 +236,32 @@ bool vertex_coloring_solver::ExecutionContext::generateColumnsByCplex(MainCplexM
         slave_solution.values = graph.supplementSetsToMaximumForInclusion(slave_solution.values);
         double lower_bound = roundUpWithEpsilon(current_solution.primal.size / slave_solution.upper_bound);
         if (!lessThan(lower_bound, optimal_solution.size)) {
-            std::cout << "\nCPLEX COLUMN GENERATION - ITERATION #" << iterations
-                      << ": Stop - lower bound. Added variables: " << total_variables
-                      << std::endl;
+//            std::cout << "\nCPLEX COLUMN GENERATION - ITERATION #" << iterations
+//                      << ": Stop - lower bound. Added variables: " << total_variables
+//                      << std::endl;
             return true;
         }
         if (!greaterThan(slave_solution.upper_bound, 1.0)) {
-            std::cout << "\nCPLEX COLUMN GENERATION - ITERATION #" << iterations
-                      << ": Stop - can't find any violated constraints. Added variables: " << total_variables
-                      << std::endl;
+//            std::cout << "\nCPLEX COLUMN GENERATION - ITERATION #" << iterations
+//                      << ": Stop - can't find any violated constraints. Added variables: " << total_variables
+//                      << std::endl;
             return false;
         }
         bool isVariableExists = main_cplex_model.addColoringAsVariable(slave_solution.values);
         if (isVariableExists) {
-            std::cout << "\nCPLEX COLUMN GENERATION - ITERATION #" << iterations
-                      << ": Stop - all variables already exists. Added variables: " << total_variables
-                      << std::endl;
+//            std::cout << "\nCPLEX COLUMN GENERATION - ITERATION #" << iterations
+//                      << ": Stop - all variables already exists. Added variables: " << total_variables
+//                      << std::endl;
             return false;
         }
         total_variables += 1;
         current_solution = main_cplex_model.solveFloatProblem();
         if (isTailingOff(std::fabs(current_solution.primal.size - previous_upper_bound))) {
-            std::cout << "\nCPLEX COLUMN GENERATION - ITERATION #" << iterations
-                      << ": Stop - objective function delta is too small:"
-                      << std::fabs(current_solution.primal.size - previous_upper_bound) << " Added variables: "
-                      << total_variables
-                      << std::endl;
+//            std::cout << "\nCPLEX COLUMN GENERATION - ITERATION #" << iterations
+//                      << ": Stop - objective function delta is too small:"
+//                      << std::fabs(current_solution.primal.size - previous_upper_bound) << " Added variables: "
+//                      << total_variables
+//                      << std::endl;
             return false;
         }
         previous_upper_bound = current_solution.primal.size;

@@ -27,9 +27,6 @@ private:
 
     std::vector<IloNumVar> variables;
 
-    IloObjective current_objective_function;
-    IloObjective::Sense objective_sense;
-
     IloRange buildConstraint(const std::set<uint64_t> &constraint,
                              double lower_bound,
                              double upper_bound);
@@ -97,5 +94,4 @@ public:
 
     IloRange buildConstraint(const Bitset &constraint, double lower_bound, const double upper_bound);
 
-    virtual ~CplexModel();
 };

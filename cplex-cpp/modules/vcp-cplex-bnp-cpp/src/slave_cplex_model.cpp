@@ -82,15 +82,8 @@ IntegerSolution SlaveCplexModel::getIntegerSolution(bool exact) {
     upper_bound = solver.getBestObjValue();
     auto variables = model.getVariables();
     for (uint64_t i = 0; i < variables.size(); ++i) {
-        solver_variables.set(i, solver.getValue(variables[i]) == 1.0);
+        solver_variables.set(i, equals(solver.getValue(variables[i]), 1.0));
     }
 
-//    std::cout << "\nGot integer solution from slave model:\tupper_bound:=" << upper_bound << "\tobjective value:="
-//              << solver.getObjValue() << "\tvalues:=";
-//    for (std::size_t i = 0; i < variables.size(); ++i) {
-//        if (!solver_variables[i]) continue;
-//        std::cout << "x[" << i << "]\t";
-//    }
-//    std::cout << std::endl;
     return {upper_bound, solver_variables};
 }
