@@ -111,7 +111,6 @@ IndependentSets Graph::colorWeightedGraph(const std::vector<double> &weights) co
     return sets;
 }
 
-// TODO investigate performance
 IndependentSets Graph::getIndependentSetByColoring(const NodesOrderingStrategy &strategy) const {
     std::vector<uint64_t> ordered_vertices = orderVertices(strategy);
 
@@ -147,17 +146,19 @@ IndependentSets Graph::getIndependentSetByColoring(const NodesOrderingStrategy &
     return sets;
 }
 
-std::vector<WeightToVertices> Graph::getWeightedIndependentSet(const std::vector<double> &weights) const {
-    std::vector<WeightToVertices> result;
-    IndependentSets independent_sets_by_coloring = colorWeightedGraph(weights);
-    for (const auto &independent_set: independent_sets_by_coloring) {
-        double weight = 0.0;
-        for (std::size_t i = 0; i < n_; ++i) {
-            weight += weights[i] * independent_set[i];
+std::set<WeightWithColumn> Graph::getWeightedIndependentSet(const std::vector<double> &weights) const {
+    std::set<WeightWithColumn> result;
+    for (std::size_t v = 0; v < n_; ++v) {
+        for (std::size_t u = v + 1; u < n_; ++u) {
+            double weight = weights[u] + weights[v];
+            if (!confusion_matrix_bit_set_[v][u] && greaterThan(weight, 1e-8)) {
+                Bitset constraint;
+                constraint.set(u, true);
+                constraint.set(v, true);
+                result.emplace(WeightWithColumn(weight, constraint));
+            }
         }
-        result.emplace_back(std::make_pair(weight, independent_set));
     }
-    std::sort(result.begin(), result.end(), [](WeightToVertices a, WeightToVertices b) { return a.first > b.first; });
     return result;
 }
 

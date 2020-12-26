@@ -55,7 +55,7 @@ namespace vertex_coloring_solver {
 
         void startBranchAndPrice(MainCplexModel &main_cplex_model, SlaveCplexModel &slave_cplex_model);
 
-        std::set<WeightWithColumn> findColumnToAddToModel(const FloatSolution &solution);
+        std::set<WeightWithColumn> findColumnsToAddToModel(const FloatSolution &solution);
 
         bool generateColumnsByHeuristic(MainCplexModel &main_cplex_model,
                                         MainFloatSolution &current_solution);

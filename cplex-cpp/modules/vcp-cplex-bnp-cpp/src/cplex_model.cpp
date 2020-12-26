@@ -124,7 +124,7 @@ void CplexModel::reduceModel(std::size_t limit) {
         for (auto it = all_constraints.begin(); it != all_constraints.end();) {
             auto constraint = *it;
             double slack = cplex.getSlack(constraint.second);
-            if (slack > 0.0) {
+            if (greaterThan(slack, 0.0)) {
                 to_delete.push_back(constraint.second);
                 it = all_constraints.erase(it);
             } else {

@@ -8,9 +8,8 @@
 
 int main() {
     std::vector<std::string> test = {"graph", "best possible solution", "result", "heuristic_result", "timeout",
-                                     "time (sec)", "max_depth", "branches_num", "average_float_cplex_time",
-                                     "discarded_branches_num", "average_cutting_time",
-                                     "average_cutting_iteration_time"};
+                                     "time (sec)", "cplex time (ms)", "max_depth", "branches_num",
+                                     "discarded_branches_num"};
     std::set<std::bitset<1024>> a;
     CsvWriter csv_log("./", "results-" + utils::get_current_datetime_str() + ".csv", test);
     csv_log.writeTitle("");

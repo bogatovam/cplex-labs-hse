@@ -20,13 +20,24 @@ typedef Bitset Column;
 
 typedef std::vector<Column> IndependentSets;
 
-typedef std::pair<double, Bitset> WeightToVertices;
-
 static const std::vector<NodesOrderingStrategy> nodes_ordering_strategies = {
         NodesOrderingStrategy::SATURATION_SMALLEST_FIRST,
         NodesOrderingStrategy::SMALLEST_DEGREE_SUPPORT_FIRST,
         NodesOrderingStrategy::RANDOM,
         NodesOrderingStrategy::INDEX
+};
+
+class WeightWithColumn {
+public:
+    double weight;
+
+    Column column;
+
+    WeightWithColumn(double weight, const Column &column);
+
+    WeightWithColumn &operator=(const WeightWithColumn &other) = default;
+
+    bool operator<(const WeightWithColumn &rhs) const;
 };
 
 class Graph {
@@ -50,7 +61,7 @@ public:
 
     IndependentSets getIndependentSetByColoring(const NodesOrderingStrategy &strategy) const;
 
-    std::vector<WeightToVertices> getWeightedIndependentSet(const std::vector<double> &weights) const;
+    std::set<WeightWithColumn> getWeightedIndependentSet(const std::vector<double> &weights) const;
 
     Column supplementSetsToMaximumForInclusion(const Column &independent_set) const;
 
@@ -83,17 +94,4 @@ public:
     inline std::size_t degree(uint64_t vertex) const {
         return adjacency_lists_[vertex].size();
     }
-};
-
-class WeightWithColumn {
-public:
-    double weight;
-
-    Column column;
-
-    WeightWithColumn(double weight, const Column &column);
-
-    WeightWithColumn &operator=(const WeightWithColumn &other) = default;
-
-    bool operator<(const WeightWithColumn &rhs) const;
 };
